@@ -58,12 +58,10 @@ export class PropertiesService {
   async findWithFilters(filters: FilterPropertyDto) {
     const { skip = 0, take = 10, ...filterParams } = filters;
 
-    // Construir o objeto where com todos os filtros
     const where: any = {
       deletedAt: null,
     };
 
-    // Filtros simples
     if (filterParams.type) {
       where.type = filterParams.type;
     }
@@ -93,7 +91,6 @@ export class PropertiesService {
       };
     }
 
-    // Filtro de busca por título ou descrição
     if (filterParams.search) {
       where.OR = [
         {
@@ -111,7 +108,6 @@ export class PropertiesService {
       ];
     }
 
-    // Filtros de preço
     if (filterParams.minPrice !== undefined || filterParams.maxPrice !== undefined) {
       where.price = {};
       if (filterParams.minPrice !== undefined) {
@@ -122,7 +118,6 @@ export class PropertiesService {
       }
     }
 
-    // Filtros de área
     if (filterParams.minTotalArea !== undefined || filterParams.maxTotalArea !== undefined) {
       where.totalArea = {};
       if (filterParams.minTotalArea !== undefined) {
@@ -143,7 +138,6 @@ export class PropertiesService {
       }
     }
 
-    // Filtros de dormitórios
     if (filterParams.minBedrooms !== undefined || filterParams.maxBedrooms !== undefined) {
       where.bedrooms = {};
       if (filterParams.minBedrooms !== undefined) {
@@ -154,7 +148,6 @@ export class PropertiesService {
       }
     }
 
-    // Filtros de banheiros
     if (filterParams.minBathrooms !== undefined || filterParams.maxBathrooms !== undefined) {
       where.bathrooms = {};
       if (filterParams.minBathrooms !== undefined) {
@@ -165,7 +158,6 @@ export class PropertiesService {
       }
     }
 
-    // Filtros de vagas de garagem
     if (
       filterParams.minParkingSpaces !== undefined ||
       filterParams.maxParkingSpaces !== undefined
@@ -179,7 +171,6 @@ export class PropertiesService {
       }
     }
 
-    // Filtro de tipo de negócio
     if (filterParams.businessType) {
       where.businessTypes = {
         some: {
