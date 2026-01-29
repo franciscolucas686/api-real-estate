@@ -126,6 +126,8 @@ model Property {
   userId       String 
   user         User     @relation(fields: [userId], references: [id])
 
+  images        PropertyImage[]
+
   house         House?
   apartment     Apartment?
   land          Land?
@@ -136,6 +138,18 @@ model Property {
 
   @@index([type, status])
   @@index([city, neighborhood])
+}
+
+model PropertyImage {
+  id        String   @id @default(uuid())
+  propertyId String
+  url       String
+  
+  createdAt DateTime @default(now())
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
 }
 
 
