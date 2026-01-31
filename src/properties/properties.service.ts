@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import sharp from 'sharp';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { FilterPropertyDto } from './dto/filter-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
@@ -11,6 +12,7 @@ export class PropertiesService {
   constructor(
     private prisma: PrismaService,
     private cloudinary: CloudinaryService,
+    private whatsapp: WhatsappService,
   ) {}
 
   async create(createPropertyDto: CreatePropertyDto, userId: string) {
@@ -238,10 +240,13 @@ export class PropertiesService {
       },
     });
 
+    const whatsappNumber = this.whatsapp.getWhatsappNumber(id);
+
     return {
       ...property,
       images,
       user,
+      whatsappContact: whatsappNumber,
     };
   }
 
@@ -357,5 +362,9 @@ export class PropertiesService {
     return this.prisma.propertyImage.delete({
       where: { id: imageId },
     });
+  }
+
+  getWhatsappNumber(propertyId: string): string {
+    return this.whatsapp.getWhatsappNumber(propertyId);
   }
 }

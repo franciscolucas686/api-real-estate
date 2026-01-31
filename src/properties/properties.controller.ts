@@ -113,6 +113,14 @@ export class PropertiesController {
     return this.propertiesService.findOne(id);
   }
 
+  @Get(':id/whatsapp')
+  async getWhatsappContact(@Param('id') propertyId: string) {
+    return {
+      propertyId,
+      whatsappNumber: this.propertiesService.getWhatsappNumber(propertyId),
+    };
+  }
+
   @Patch(':id')
   @UseGuards(JwtGuard)
   async update(
