@@ -1,10 +1,11 @@
+import { PropertyStatus, PropertyType } from '@prisma/client';
 import { CreatePropertyDto } from './create-property.dto';
 
 export class UpdatePropertyDto implements Partial<CreatePropertyDto> {
   title?: string;
   description?: string;
-  type?: any;
-  status?: any;
+  type?: PropertyType;
+  status?: PropertyStatus;
   price?: number;
   rentPrice?: number;
   condoFee?: number;

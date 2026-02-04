@@ -141,13 +141,14 @@ model Property {
 }
 
 model PropertyImage {
-  id        String   @id @default(uuid())
-  propertyId String
-  url       String
+  id          String   @id @default(uuid())
+  propertyId  String
+  url         String
+  isMain      Boolean  @default(false)
   
-  createdAt DateTime @default(now())
+  createdAt   DateTime @default(now())
 
-  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@index([propertyId])
 }

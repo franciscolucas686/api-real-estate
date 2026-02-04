@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res, UseGuards } fro
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { CurrentUserDto } from './dto/current-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
@@ -64,7 +65,7 @@ export class AuthController {
   @Post('refresh')
   @UseGuards(JwtRefreshGuard)
   @HttpCode(HttpStatus.OK)
-  async refresh(@CurrentUser() user: any, @Res() response: Response) {
+  async refresh(@CurrentUser() user: CurrentUserDto, @Res() response: Response) {
     const result = await this.authService.refreshToken(user.id);
 
     response.cookie('accessToken', result.accessToken, {
@@ -88,7 +89,7 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtGuard)
-  getProfile(@CurrentUser() user: any) {
+  getProfile(@CurrentUser() user: CurrentUserDto) {
     return {
       id: user.id,
       email: user.email,
@@ -98,7 +99,7 @@ export class AuthController {
   @Post('logout')
   @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
-  async logout(@CurrentUser() user: any, @Res() response: Response) {
+  async logout(@CurrentUser() user: CurrentUserDto, @Res() response: Response) {
     const userId = user.id;
     await this.authService.logout(userId);
 
