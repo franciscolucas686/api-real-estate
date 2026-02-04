@@ -1,7 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, PropertyImage } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { FilterPropertyDto } from './dto/filter-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
@@ -11,6 +14,7 @@ export class PropertiesService {
   constructor(
     private prisma: PrismaService,
     private cloudinary: CloudinaryService,
+    private whatsapp: WhatsappService,
   ) {}
 
   async create(createPropertyDto: CreatePropertyDto, userId: string) {
@@ -22,171 +26,22 @@ export class PropertiesService {
     });
   }
 
-  async findAll(skip = 0, take = 10) {
-    const [properties, total] = await Promise.all([
-      this.prisma.property.findMany({
-        skip,
-        take,
-        where: {
-          deletedAt: null,
-        },
-      }),
-      this.prisma.property.count({
-        where: {
-          deletedAt: null,
-        },
-      }),
-    ]);
-
-    const propertiesWithImages = await Promise.all(
-      properties.map(async (property) => {
-        const images = await this.prisma.propertyImage.findMany({
-          where: { propertyId: property.id },
-        });
-        return { ...property, images };
-      }),
-    );
-
-    return {
-      data: propertiesWithImages,
-      total,
-      skip,
-      take,
-    };
+  async findAll(filters: FilterPropertyDto = {}) {
+    return this.findWithFilters(filters);
   }
 
   async findWithFilters(filters: FilterPropertyDto) {
     const { skip = 0, take = 10, ...filterParams } = filters;
 
-    const where: any = {
-      deletedAt: null,
-    };
-
-    if (filterParams.type) {
-      where.type = filterParams.type;
-    }
-
-    if (filterParams.status) {
-      where.status = filterParams.status;
-    }
-
-    if (filterParams.city) {
-      where.city = {
-        contains: filterParams.city,
-        mode: 'insensitive',
-      };
-    }
-
-    if (filterParams.neighborhood) {
-      where.neighborhood = {
-        contains: filterParams.neighborhood,
-        mode: 'insensitive',
-      };
-    }
-
-    if (filterParams.state) {
-      where.state = {
-        contains: filterParams.state,
-        mode: 'insensitive',
-      };
-    }
-
-    if (filterParams.search) {
-      where.OR = [
-        {
-          title: {
-            contains: filterParams.search,
-            mode: 'insensitive',
-          },
-        },
-        {
-          description: {
-            contains: filterParams.search,
-            mode: 'insensitive',
-          },
-        },
-      ];
-    }
-
-    if (filterParams.minPrice !== undefined || filterParams.maxPrice !== undefined) {
-      where.price = {};
-      if (filterParams.minPrice !== undefined) {
-        where.price.gte = filterParams.minPrice;
-      }
-      if (filterParams.maxPrice !== undefined) {
-        where.price.lte = filterParams.maxPrice;
-      }
-    }
-
-    if (filterParams.minTotalArea !== undefined || filterParams.maxTotalArea !== undefined) {
-      where.totalArea = {};
-      if (filterParams.minTotalArea !== undefined) {
-        where.totalArea.gte = filterParams.minTotalArea;
-      }
-      if (filterParams.maxTotalArea !== undefined) {
-        where.totalArea.lte = filterParams.maxTotalArea;
-      }
-    }
-
-    if (filterParams.minBuiltArea !== undefined || filterParams.maxBuiltArea !== undefined) {
-      where.builtArea = {};
-      if (filterParams.minBuiltArea !== undefined) {
-        where.builtArea.gte = filterParams.minBuiltArea;
-      }
-      if (filterParams.maxBuiltArea !== undefined) {
-        where.builtArea.lte = filterParams.maxBuiltArea;
-      }
-    }
-
-    if (filterParams.minBedrooms !== undefined || filterParams.maxBedrooms !== undefined) {
-      where.bedrooms = {};
-      if (filterParams.minBedrooms !== undefined) {
-        where.bedrooms.gte = filterParams.minBedrooms;
-      }
-      if (filterParams.maxBedrooms !== undefined) {
-        where.bedrooms.lte = filterParams.maxBedrooms;
-      }
-    }
-
-    if (filterParams.minBathrooms !== undefined || filterParams.maxBathrooms !== undefined) {
-      where.bathrooms = {};
-      if (filterParams.minBathrooms !== undefined) {
-        where.bathrooms.gte = filterParams.minBathrooms;
-      }
-      if (filterParams.maxBathrooms !== undefined) {
-        where.bathrooms.lte = filterParams.maxBathrooms;
-      }
-    }
-
-    if (
-      filterParams.minParkingSpaces !== undefined ||
-      filterParams.maxParkingSpaces !== undefined
-    ) {
-      where.parkingSpaces = {};
-      if (filterParams.minParkingSpaces !== undefined) {
-        where.parkingSpaces.gte = filterParams.minParkingSpaces;
-      }
-      if (filterParams.maxParkingSpaces !== undefined) {
-        where.parkingSpaces.lte = filterParams.maxParkingSpaces;
-      }
-    }
-
-    if (filterParams.businessType) {
-      where.businessTypes = {
-        some: {
-          businessType: {
-            code: filterParams.businessType,
-          },
-        },
-      };
-    }
+    const where = this.buildWhereClause(filterParams);
 
     const [properties, total] = await Promise.all([
       this.prisma.property.findMany({
-        skip: parseInt(skip.toString()),
-        take: parseInt(take.toString()),
+        skip,
+        take,
         where,
         include: {
+          images: true,
           businessTypes: {
             include: {
               businessType: true,
@@ -194,139 +49,105 @@ export class PropertiesService {
           },
         },
       }),
-      this.prisma.property.count({
-        where,
-      }),
+      this.prisma.property.count({ where }),
     ]);
 
-    const propertiesWithImages = await Promise.all(
-      properties.map(async (property) => {
-        const images = await this.prisma.propertyImage.findMany({
-          where: { propertyId: property.id },
-        });
-        return { ...property, images };
-      }),
-    );
-
     return {
-      data: propertiesWithImages,
+      data: properties,
       total,
-      skip: parseInt(skip.toString()),
-      take: parseInt(take.toString()),
+      skip,
+      take,
     };
   }
 
   async findOne(id: string) {
     const property = await this.prisma.property.findUnique({
       where: { id },
-    });
-
-    if (!property) {
-      return null;
-    }
-
-    const images = await this.prisma.propertyImage.findMany({
-      where: { propertyId: id },
-    });
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: property.userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
+      include: {
+        images: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     });
 
+    if (!property) {
+      throw new NotFoundException(`Propriedade com ID ${id} não encontrada`);
+    }
+
+    const whatsappNumber = this.whatsapp.getWhatsappNumber(id);
+
     return {
       ...property,
-      images,
-      user,
+      whatsappContact: whatsappNumber,
     };
   }
 
-  async update(id: string, updatePropertyDto: UpdatePropertyDto, userId: string) {
-    const property = await this.prisma.property.findUnique({
-      where: { id },
-    });
-
-    if (!property) {
-      throw new Error('Propriedade não encontrada');
+  async update(id: string, updatePropertyDto: UpdatePropertyDto) {
+    try {
+      return await this.prisma.property.update({
+        where: { id },
+        data: updatePropertyDto,
+      });
+    } catch (error) {
+      throw new NotFoundException(`Propriedade com ID ${id} não encontrada`);
     }
-
-    return this.prisma.property.update({
-      where: { id },
-      data: updatePropertyDto,
-    });
   }
 
   async remove(id: string, userId: string) {
     const property = await this.prisma.property.findUnique({
       where: { id },
+      include: { images: true },
     });
 
     if (!property) {
-      throw new Error('Propriedade não encontrada');
+      throw new NotFoundException(`Propriedade com ID ${id} não encontrada`);
     }
 
-    const images = await this.prisma.propertyImage.findMany({
-      where: { propertyId: id },
-    });
-
-    for (const image of images) {
-      const publicId = image.url.split('/').slice(-1)[0].split('.')[0];
-      try {
-        await this.cloudinary.deleteImage(`real-estate-properties/${publicId}`);
-      } catch (error) {
-        console.error('Erro ao deletar imagem do Cloudinary:', error);
-      }
-    }
+    await this.deletePropertyImagesFromCloudinary(property.images);
 
     return this.prisma.property.update({
       where: { id },
-      data: {
-        deletedAt: new Date(),
-      },
+      data: { deletedAt: new Date() },
     });
   }
 
   async uploadImages(propertyId: string, files: Express.Multer.File[]): Promise<string[]> {
-    if (!files || files.length === 0) {
-      throw new Error('Nenhum arquivo enviado');
+    const uploadPromises = files.map((file) => this.processAndUploadImage(propertyId, file));
+    return Promise.all(uploadPromises);
+  }
+
+  private async processAndUploadImage(
+    propertyId: string,
+    file: Express.Multer.File,
+  ): Promise<string> {
+    try {
+      const compressedBuffer = await sharp(file.buffer)
+        .resize(1920, 1080, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+
+      const url = await this.cloudinary.uploadImage(
+        compressedBuffer,
+        `${propertyId}-${Date.now()}-${randomUUID()}`,
+      );
+
+      await this.prisma.propertyImage.create({
+        data: { propertyId, url },
+      });
+
+      return url;
+    } catch (error) {
+      console.error('Erro ao processar imagem:', error);
+      throw error;
     }
-
-    const uploadedUrls: string[] = [];
-
-    for (const file of files) {
-      try {
-        const compressedBuffer = await sharp(file.buffer)
-          .resize(1920, 1080, {
-            fit: 'inside',
-            withoutEnlargement: true,
-          })
-          .jpeg({ quality: 80 })
-          .toBuffer();
-
-        const url = await this.cloudinary.uploadImage(
-          compressedBuffer,
-          `${propertyId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        );
-
-        await this.prisma.propertyImage.create({
-          data: {
-            propertyId,
-            url,
-          },
-        });
-
-        uploadedUrls.push(url);
-      } catch (error) {
-        console.error('Erro ao processar imagem:', error);
-        throw error;
-      }
-    }
-
-    return uploadedUrls;
   }
 
   async deleteImage(imageId: string, userId: string) {
@@ -335,7 +156,7 @@ export class PropertiesService {
     });
 
     if (!image) {
-      throw new Error('Imagem não encontrada');
+      throw new NotFoundException(`Imagem com ID ${imageId} não encontrada`);
     }
 
     const property = await this.prisma.property.findUnique({
@@ -343,19 +164,91 @@ export class PropertiesService {
     });
 
     if (!property) {
-      throw new Error('Propriedade não encontrada');
+      throw new NotFoundException(`Propriedade com ID ${image.propertyId} não encontrada`);
     }
 
-    const publicId = image.url.split('/').slice(-1)[0].split('.')[0];
-
-    try {
-      await this.cloudinary.deleteImage(`real-estate-properties/${publicId}`);
-    } catch (error) {
-      console.error('Erro ao deletar imagem do Cloudinary:', error);
-    }
+    await this.deletePropertyImagesFromCloudinary([image]);
 
     return this.prisma.propertyImage.delete({
       where: { id: imageId },
     });
+  }
+
+  getWhatsappNumber(propertyId: string): string {
+    return this.whatsapp.getWhatsappNumber(propertyId);
+  }
+
+  private buildWhereClause(filters: Partial<FilterPropertyDto>): Prisma.PropertyWhereInput {
+    const where: Prisma.PropertyWhereInput = {
+      deletedAt: null,
+    };
+
+    if (filters.type) where.type = filters.type;
+    if (filters.status) where.status = filters.status;
+
+    if (filters.city) {
+      where.city = { contains: filters.city, mode: 'insensitive' };
+    }
+    if (filters.neighborhood) {
+      where.neighborhood = { contains: filters.neighborhood, mode: 'insensitive' };
+    }
+    if (filters.state) {
+      where.state = { contains: filters.state, mode: 'insensitive' };
+    }
+
+    if (filters.search) {
+      where.OR = [
+        { title: { contains: filters.search, mode: 'insensitive' } },
+        { description: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const rangeFilters = [
+      { key: 'price', min: 'minPrice', max: 'maxPrice' },
+      { key: 'totalArea', min: 'minTotalArea', max: 'maxTotalArea' },
+      { key: 'builtArea', min: 'minBuiltArea', max: 'maxBuiltArea' },
+      { key: 'bedrooms', min: 'minBedrooms', max: 'maxBedrooms' },
+      { key: 'bathrooms', min: 'minBathrooms', max: 'maxBathrooms' },
+      { key: 'parkingSpaces', min: 'minParkingSpaces', max: 'maxParkingSpaces' },
+    ];
+
+    rangeFilters.forEach(({ key, min, max }) => {
+      if (filters[min] !== undefined || filters[max] !== undefined) {
+        where[key] = {};
+        if (filters[min] !== undefined) where[key].gte = filters[min];
+        if (filters[max] !== undefined) where[key].lte = filters[max];
+      }
+    });
+
+    if (filters.businessType) {
+      where.businessTypes = {
+        some: {
+          businessType: {
+            code: filters.businessType,
+          },
+        },
+      };
+    }
+
+    return where;
+  }
+
+  private async deletePropertyImagesFromCloudinary(images: PropertyImage[]) {
+    const deletePromises = images.map((image) => this.deleteImageFromCloudinary(image));
+
+    await Promise.allSettled(deletePromises);
+  }
+
+  private async deleteImageFromCloudinary(image: PropertyImage): Promise<void> {
+    try {
+      const publicId = this.extractPublicId(image.url);
+      await this.cloudinary.deleteImage(`real-estate-properties/${publicId}`);
+    } catch (error) {
+      console.warn(`Erro ao deletar imagem ${image.id} do Cloudinary:`, error);
+    }
+  }
+
+  private extractPublicId(imageUrl: string): string {
+    return imageUrl.split('/').slice(-1)[0].split('.')[0];
   }
 }
