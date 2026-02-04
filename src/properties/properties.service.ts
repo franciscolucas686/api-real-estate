@@ -116,15 +116,42 @@ export class PropertiesService {
     });
   }
 
-  async uploadImages(propertyId: string, files: Express.Multer.File[]): Promise<string[]> {
-    const uploadPromises = files.map((file) => this.processAndUploadImage(propertyId, file));
-    return Promise.all(uploadPromises);
+  async uploadImages(
+    propertyId: string,
+    files: Express.Multer.File[],
+  ): Promise<{
+    images: PropertyImage[];
+    mainImage: PropertyImage;
+    total: number;
+  }> {
+    const imageCount = await this.prisma.propertyImage.count({ where: { propertyId } });
+    const isFirstBatch = imageCount === 0;
+
+    const processedImages = await Promise.all(
+      files.map(async (file, index) => ({
+        file,
+        isMain: isFirstBatch && index === 0,
+      })),
+    );
+
+    const uploadedImages = await Promise.all(
+      processedImages.map(({ file, isMain }) =>
+        this.processAndUploadImage(propertyId, file, isMain),
+      ),
+    );
+
+    return {
+      images: uploadedImages,
+      mainImage: uploadedImages[0],
+      total: uploadedImages.length,
+    };
   }
 
   private async processAndUploadImage(
     propertyId: string,
     file: Express.Multer.File,
-  ): Promise<string> {
+    isMain: boolean,
+  ): Promise<PropertyImage> {
     try {
       const compressedBuffer = await sharp(file.buffer)
         .resize(1920, 1080, {
@@ -139,15 +166,54 @@ export class PropertiesService {
         `${propertyId}-${Date.now()}-${randomUUID()}`,
       );
 
-      await this.prisma.propertyImage.create({
-        data: { propertyId, url },
+      const image = await this.prisma.propertyImage.create({
+        data: { propertyId, url, isMain },
       });
 
-      return url;
+      return image;
     } catch (error) {
       console.error('Erro ao processar imagem:', error);
       throw error;
     }
+  }
+
+  async setMainImage(propertyId: string, imageId: string): Promise<PropertyImage> {
+    const image = await this.prisma.propertyImage.findUnique({
+      where: { id: imageId },
+    });
+
+    if (!image) {
+      throw new NotFoundException(`Imagem com ID ${imageId} não encontrada`);
+    }
+
+    if (image.propertyId !== propertyId) {
+      throw new NotFoundException(`Imagem com ID ${imageId} não pertence ao imóvel ${propertyId}`);
+    }
+
+    await Promise.all([
+      this.prisma.propertyImage.updateMany({
+        where: {
+          propertyId,
+          id: { not: imageId },
+          isMain: true,
+        },
+        data: { isMain: false },
+      }),
+      this.prisma.propertyImage.update({
+        where: { id: imageId },
+        data: { isMain: true },
+      }),
+    ]);
+
+    const updatedImage = await this.prisma.propertyImage.findUnique({
+      where: { id: imageId },
+    });
+
+    if (!updatedImage) {
+      throw new NotFoundException(`Imagem com ID ${imageId} não encontrada`);
+    }
+
+    return updatedImage;
   }
 
   async deleteImage(imageId: string, userId: string) {

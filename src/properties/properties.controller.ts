@@ -75,6 +75,12 @@ export class PropertiesController {
     return this.propertiesService.uploadImages(propertyId, files);
   }
 
+  @Patch(':propertyId/images/:imageId/set-main')
+  @UseGuards(JwtGuard)
+  async setMainImage(@Param('propertyId') propertyId: string, @Param('imageId') imageId: string) {
+    return this.propertiesService.setMainImage(propertyId, imageId);
+  }
+
   @Delete(':imageId')
   @HttpCode(204)
   @UseGuards(JwtGuard)
