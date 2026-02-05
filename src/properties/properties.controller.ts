@@ -21,11 +21,14 @@ import { CreatePropertyDto } from './dto/create-property.dto';
 import { FilterPropertyDto } from './dto/filter-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 import { PropertiesService } from './properties.service';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('properties')
 export class PropertiesController {
   constructor(private readonly propertiesService: PropertiesService) {}
 
+  //@Throttle({ default: { ttl: 3600, limit: 20 } }) - Limite de 20 cadastros a cada hora
+  // será aplicado após o cadastro massivo de properties no app
   @Post()
   @HttpCode(201)
   @UseGuards(JwtGuard)
@@ -33,22 +36,26 @@ export class PropertiesController {
     return this.propertiesService.create(createPropertyDto, user.id);
   }
 
+  @Throttle({ default: { ttl: 60, limit: 60 } })
   @Get()
   async findAll(@Query() filters: FilterPropertyDto) {
     return this.propertiesService.findAll(filters);
   }
 
+  @Throttle({ default: { ttl: 60, limit: 120 } })
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.propertiesService.findOne(id);
   }
 
+  @Throttle({ default: { ttl: 3600, limit: 60 } })
   @Patch(':id')
   @UseGuards(JwtGuard)
   async update(@Param('id') id: string, @Body() updatePropertyDto: UpdatePropertyDto) {
     return this.propertiesService.update(id, updatePropertyDto);
   }
 
+  @Throttle({ default: { ttl: 60, limit: 30 } })
   @Delete(':id')
   @HttpCode(204)
   @UseGuards(JwtGuard)
@@ -56,6 +63,8 @@ export class PropertiesController {
     await this.propertiesService.remove(id, user.id);
   }
 
+  // @Throttle({ default: { ttl: 1800, limit: 20 } }) - Limite de 20 uploads a cada 30 minutos
+  // será aplicado após o cadastro massivo de properties no app
   @Post(':id/images')
   @HttpCode(201)
   @UseGuards(JwtGuard)
@@ -81,6 +90,7 @@ export class PropertiesController {
     return this.propertiesService.setMainImage(propertyId, imageId);
   }
 
+  @Throttle({ default: { ttl: 3600, limit: 30 } })
   @Delete(':imageId')
   @HttpCode(204)
   @UseGuards(JwtGuard)
