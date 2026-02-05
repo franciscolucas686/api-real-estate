@@ -65,13 +65,16 @@ export class PropertiesService {
       where: { id },
       include: {
         images: true,
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+        businessTypes: {
+          include: {
+            businessType: true,
           },
         },
+        house: true,
+        apartment: true,
+        land: true,
+        smallfarm: true,
+        countryhouse: true,
       },
     });
 
