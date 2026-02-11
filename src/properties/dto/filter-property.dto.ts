@@ -1,5 +1,5 @@
 import { BusinessCode, PropertyStatus, PropertyType } from '@prisma/client';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsEnum, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class FilterPropertyDto {
@@ -105,14 +105,16 @@ export class FilterPropertyDto {
 
   @IsOptional()
   @Type(() => Number)
+  @Transform(({ value }) => (value === undefined ? 0 : value))
   @IsNumber()
   @Min(0)
-  skip?: number = 0;
+  skip?: number;
 
   @IsOptional()
   @Type(() => Number)
+  @Transform(({ value }) => (value === undefined ? 10 : value))
   @IsNumber()
   @Min(1)
   @Max(100)
-  take?: number = 10;
+  take?: number;
 }
