@@ -1,12 +1,16 @@
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { validateEnvConfig } from './config/env.config';
+
+const logger = new Logger('NestApplication');
 
 async function bootstrap() {
+  const envConfig = validateEnvConfig();
+
   const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(
     new ValidationPipe({
@@ -18,7 +22,7 @@ async function bootstrap() {
   app.useGlobalGuards(app.get(ThrottlerGuard));
   app.use(cookieParser());
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: envConfig.CORS_ORIGIN,
     credentials: true,
   });
 
@@ -44,6 +48,6 @@ async function bootstrap() {
   logger.log(`Documentação Swagger disponível em http://localhost:${port}/api/docs`);
 }
 bootstrap().catch((err) => {
-  console.error('Erro ao inicializar o app:', err);
+  logger.error('Erro ao inicializar o app:', err);
   process.exit(1);
 });

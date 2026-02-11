@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, PropertyImage } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
@@ -97,6 +97,7 @@ export class PropertiesService {
         data: updatePropertyDto,
       });
     } catch (error) {
+      this.logger.error(`Erro ao atualizar propriedade ${id}:`, error);
       throw new NotFoundException(`Propriedade com ID ${id} não encontrada`);
     }
   }
@@ -150,6 +151,8 @@ export class PropertiesService {
     };
   }
 
+  private readonly logger = new Logger(PropertiesService.name);
+
   private async processAndUploadImage(
     propertyId: string,
     file: Express.Multer.File,
@@ -175,7 +178,7 @@ export class PropertiesService {
 
       return image;
     } catch (error) {
-      console.error('Erro ao processar imagem:', error);
+      this.logger.error(`Erro ao processar imagem para propriedade ${propertyId}:`, error);
       throw error;
     }
   }
@@ -279,13 +282,19 @@ export class PropertiesService {
       { key: 'bedrooms', min: 'minBedrooms', max: 'maxBedrooms' },
       { key: 'bathrooms', min: 'minBathrooms', max: 'maxBathrooms' },
       { key: 'parkingSpaces', min: 'minParkingSpaces', max: 'maxParkingSpaces' },
-    ];
+    ] as const;
+
+    const filtersRecord = filters as Record<string, number | undefined>;
 
     rangeFilters.forEach(({ key, min, max }) => {
-      if (filters[min] !== undefined || filters[max] !== undefined) {
-        where[key] = {};
-        if (filters[min] !== undefined) where[key].gte = filters[min];
-        if (filters[max] !== undefined) where[key].lte = filters[max];
+      const minValue = filtersRecord[min];
+      const maxValue = filtersRecord[max];
+
+      if (minValue !== undefined || maxValue !== undefined) {
+        const range: { gte?: number; lte?: number } = {};
+        if (minValue !== undefined) range.gte = minValue;
+        if (maxValue !== undefined) range.lte = maxValue;
+        (where as Record<string, unknown>)[key] = range;
       }
     });
 
@@ -313,7 +322,7 @@ export class PropertiesService {
       const publicId = this.extractPublicId(image.url);
       await this.cloudinary.deleteImage(`real-estate-properties/${publicId}`);
     } catch (error) {
-      console.warn(`Erro ao deletar imagem ${image.id} do Cloudinary:`, error);
+      this.logger.warn(`Erro ao deletar imagem ${image.id} do Cloudinary:`, error);
     }
   }
 
