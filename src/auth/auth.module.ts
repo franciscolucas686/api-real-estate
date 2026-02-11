@@ -6,13 +6,19 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { validateEnvConfig } from '../config/env.config';
 
 @Module({
   imports: [
     PassportModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '15m' },
+    JwtModule.registerAsync({
+      useFactory: async () => {
+        const envConfig = validateEnvConfig();
+        return {
+          secret: envConfig.JWT_SECRET,
+          signOptions: { expiresIn: '15m' },
+        };
+      },
     }),
     UsersModule,
   ],
