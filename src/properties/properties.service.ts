@@ -1,9 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, PropertyImage } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { R2Service } from '../r2/r2.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { FilterPropertyDto } from './dto/filter-property.dto';
@@ -13,7 +13,7 @@ import { UpdatePropertyDto } from './dto/update-property.dto';
 export class PropertiesService {
   constructor(
     private prisma: PrismaService,
-    private cloudinary: CloudinaryService,
+    private r2: R2Service,
     private whatsapp: WhatsappService,
   ) {}
 
@@ -65,13 +65,16 @@ export class PropertiesService {
       where: { id },
       include: {
         images: true,
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+        businessTypes: {
+          include: {
+            businessType: true,
           },
         },
+        house: true,
+        apartment: true,
+        land: true,
+        smallfarm: true,
+        countryhouse: true,
       },
     });
 
@@ -94,6 +97,7 @@ export class PropertiesService {
         data: updatePropertyDto,
       });
     } catch (error) {
+      this.logger.error(`Erro ao atualizar propriedade ${id}:`, error);
       throw new NotFoundException(`Propriedade com ID ${id} não encontrada`);
     }
   }
@@ -108,7 +112,7 @@ export class PropertiesService {
       throw new NotFoundException(`Propriedade com ID ${id} não encontrada`);
     }
 
-    await this.deletePropertyImagesFromCloudinary(property.images);
+    await this.deletePropertyImagesFromR2(property.images);
 
     return this.prisma.property.update({
       where: { id },
@@ -147,6 +151,8 @@ export class PropertiesService {
     };
   }
 
+  private readonly logger = new Logger(PropertiesService.name);
+
   private async processAndUploadImage(
     propertyId: string,
     file: Express.Multer.File,
@@ -161,10 +167,8 @@ export class PropertiesService {
         .jpeg({ quality: 80 })
         .toBuffer();
 
-      const url = await this.cloudinary.uploadImage(
-        compressedBuffer,
-        `${propertyId}-${Date.now()}-${randomUUID()}`,
-      );
+      const key = `real-estate-properties/${propertyId}-${Date.now()}-${randomUUID()}.jpg`;
+      const url = await this.r2.uploadImage(compressedBuffer, key, 'image/jpeg');
 
       const image = await this.prisma.propertyImage.create({
         data: { propertyId, url, isMain },
@@ -172,7 +176,7 @@ export class PropertiesService {
 
       return image;
     } catch (error) {
-      console.error('Erro ao processar imagem:', error);
+      this.logger.error(`Erro ao processar imagem para propriedade ${propertyId}:`, error);
       throw error;
     }
   }
@@ -233,7 +237,7 @@ export class PropertiesService {
       throw new NotFoundException(`Propriedade com ID ${image.propertyId} não encontrada`);
     }
 
-    await this.deletePropertyImagesFromCloudinary([image]);
+    await this.deletePropertyImagesFromR2([image]);
 
     return this.prisma.propertyImage.delete({
       where: { id: imageId },
@@ -276,13 +280,19 @@ export class PropertiesService {
       { key: 'bedrooms', min: 'minBedrooms', max: 'maxBedrooms' },
       { key: 'bathrooms', min: 'minBathrooms', max: 'maxBathrooms' },
       { key: 'parkingSpaces', min: 'minParkingSpaces', max: 'maxParkingSpaces' },
-    ];
+    ] as const;
+
+    const filtersRecord = filters as Record<string, number | undefined>;
 
     rangeFilters.forEach(({ key, min, max }) => {
-      if (filters[min] !== undefined || filters[max] !== undefined) {
-        where[key] = {};
-        if (filters[min] !== undefined) where[key].gte = filters[min];
-        if (filters[max] !== undefined) where[key].lte = filters[max];
+      const minValue = filtersRecord[min];
+      const maxValue = filtersRecord[max];
+
+      if (minValue !== undefined || maxValue !== undefined) {
+        const range: { gte?: number; lte?: number } = {};
+        if (minValue !== undefined) range.gte = minValue;
+        if (maxValue !== undefined) range.lte = maxValue;
+        (where as Record<string, unknown>)[key] = range;
       }
     });
 
@@ -299,22 +309,18 @@ export class PropertiesService {
     return where;
   }
 
-  private async deletePropertyImagesFromCloudinary(images: PropertyImage[]) {
-    const deletePromises = images.map((image) => this.deleteImageFromCloudinary(image));
+  private async deletePropertyImagesFromR2(images: PropertyImage[]) {
+    const deletePromises = images.map((image) => this.deleteImageFromR2(image));
 
     await Promise.allSettled(deletePromises);
   }
 
-  private async deleteImageFromCloudinary(image: PropertyImage): Promise<void> {
+  private async deleteImageFromR2(image: PropertyImage): Promise<void> {
     try {
-      const publicId = this.extractPublicId(image.url);
-      await this.cloudinary.deleteImage(`real-estate-properties/${publicId}`);
+      const key = this.r2.getObjectKeyFromUrl(image.url);
+      await this.r2.deleteImage(key);
     } catch (error) {
-      console.warn(`Erro ao deletar imagem ${image.id} do Cloudinary:`, error);
+      this.logger.warn(`Erro ao deletar imagem ${image.id} do R2:`, error);
     }
-  }
-
-  private extractPublicId(imageUrl: string): string {
-    return imageUrl.split('/').slice(-1)[0].split('.')[0];
   }
 }

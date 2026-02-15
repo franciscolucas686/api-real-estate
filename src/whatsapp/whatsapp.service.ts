@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
+import { validateEnvConfig } from '../config/env.config';
 
 @Injectable()
 export class WhatsappService {
@@ -7,12 +8,9 @@ export class WhatsappService {
   private whatsappB: string;
 
   constructor() {
-    this.whatsappA = process.env.WHATSAPP_A || '';
-    this.whatsappB = process.env.WHATSAPP_B || '';
-
-    if (!this.whatsappA || !this.whatsappB) {
-      throw new Error('WHATSAPP_A e WHATSAPP_B devem ser definidos nas variáveis de ambiente');
-    }
+    const envConfig = validateEnvConfig();
+    this.whatsappA = envConfig.WHATSAPP_A;
+    this.whatsappB = envConfig.WHATSAPP_B;
   }
 
   getWhatsappNumber(propertyId: string): string {
