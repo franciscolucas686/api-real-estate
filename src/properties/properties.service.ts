@@ -2,8 +2,8 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, PropertyImage } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { R2Service } from '../r2/r2.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { FilterPropertyDto } from './dto/filter-property.dto';
@@ -13,7 +13,7 @@ import { UpdatePropertyDto } from './dto/update-property.dto';
 export class PropertiesService {
   constructor(
     private prisma: PrismaService,
-    private cloudinary: CloudinaryService,
+    private r2: R2Service,
     private whatsapp: WhatsappService,
   ) {}
 
@@ -112,7 +112,7 @@ export class PropertiesService {
       throw new NotFoundException(`Propriedade com ID ${id} não encontrada`);
     }
 
-    await this.deletePropertyImagesFromCloudinary(property.images);
+    await this.deletePropertyImagesFromR2(property.images);
 
     return this.prisma.property.update({
       where: { id },
@@ -167,10 +167,8 @@ export class PropertiesService {
         .jpeg({ quality: 80 })
         .toBuffer();
 
-      const url = await this.cloudinary.uploadImage(
-        compressedBuffer,
-        `${propertyId}-${Date.now()}-${randomUUID()}`,
-      );
+      const key = `real-estate-properties/${propertyId}-${Date.now()}-${randomUUID()}.jpg`;
+      const url = await this.r2.uploadImage(compressedBuffer, key, 'image/jpeg');
 
       const image = await this.prisma.propertyImage.create({
         data: { propertyId, url, isMain },
@@ -239,7 +237,7 @@ export class PropertiesService {
       throw new NotFoundException(`Propriedade com ID ${image.propertyId} não encontrada`);
     }
 
-    await this.deletePropertyImagesFromCloudinary([image]);
+    await this.deletePropertyImagesFromR2([image]);
 
     return this.prisma.propertyImage.delete({
       where: { id: imageId },
@@ -311,22 +309,18 @@ export class PropertiesService {
     return where;
   }
 
-  private async deletePropertyImagesFromCloudinary(images: PropertyImage[]) {
-    const deletePromises = images.map((image) => this.deleteImageFromCloudinary(image));
+  private async deletePropertyImagesFromR2(images: PropertyImage[]) {
+    const deletePromises = images.map((image) => this.deleteImageFromR2(image));
 
     await Promise.allSettled(deletePromises);
   }
 
-  private async deleteImageFromCloudinary(image: PropertyImage): Promise<void> {
+  private async deleteImageFromR2(image: PropertyImage): Promise<void> {
     try {
-      const publicId = this.extractPublicId(image.url);
-      await this.cloudinary.deleteImage(`real-estate-properties/${publicId}`);
+      const key = this.r2.getObjectKeyFromUrl(image.url);
+      await this.r2.deleteImage(key);
     } catch (error) {
-      this.logger.warn(`Erro ao deletar imagem ${image.id} do Cloudinary:`, error);
+      this.logger.warn(`Erro ao deletar imagem ${image.id} do R2:`, error);
     }
-  }
-
-  private extractPublicId(imageUrl: string): string {
-    return imageUrl.split('/').slice(-1)[0].split('.')[0];
   }
 }

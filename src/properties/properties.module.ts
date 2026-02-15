@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { R2Module } from '../r2/r2.module';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { PropertiesController } from './properties.controller';
 import { PropertiesService } from './properties.service';
 
 @Module({
-  imports: [PrismaModule, CloudinaryModule, WhatsappModule],
+  imports: [PrismaModule, R2Module, WhatsappModule],
   controllers: [PropertiesController],
   providers: [PropertiesService],
   exports: [PropertiesService],

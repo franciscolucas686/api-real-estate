@@ -33,16 +33,24 @@ export class ConfigService {
     return this.envConfig.CORS_ORIGIN;
   }
 
-  get cloudinaryCloudName(): string {
-    return this.envConfig.CLOUDINARY_CLOUD_NAME;
+  get r2AccountId(): string {
+    return this.envConfig.R2_ACCOUNT_ID;
   }
 
-  get cloudinaryApiKey(): string {
-    return this.envConfig.CLOUDINARY_API_KEY;
+  get r2AccessKeyId(): string {
+    return this.envConfig.R2_ACCESS_KEY_ID;
   }
 
-  get cloudinaryApiSecret(): string {
-    return this.envConfig.CLOUDINARY_API_SECRET;
+  get r2SecretAccessKey(): string {
+    return this.envConfig.R2_SECRET_ACCESS_KEY;
+  }
+
+  get r2BucketName(): string {
+    return this.envConfig.R2_BUCKET_NAME;
+  }
+
+  get r2PublicBaseUrl(): string {
+    return this.envConfig.R2_PUBLIC_BASE_URL;
   }
 
   get whatsappA(): string {

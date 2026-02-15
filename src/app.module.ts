@@ -4,12 +4,12 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
-import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { CacheInterceptor } from './common/interceptors/cache.interceptor';
 import { AppConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PropertiesModule } from './properties/properties.module';
+import { R2Module } from './r2/r2.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -18,7 +18,7 @@ import { UsersModule } from './users/users.module';
     PrismaModule,
     AuthModule,
     UsersModule,
-    CloudinaryModule,
+    R2Module,
     PropertiesModule,
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: 60, limit: 100 }],
