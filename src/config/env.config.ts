@@ -43,7 +43,7 @@ const envSchema = z
       requiredInProd.forEach((key) => {
         if (!env[key]) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: `${key} é obrigatório em produção`,
             path: [key],
           });
@@ -59,7 +59,7 @@ export function validateEnvConfig(): EnvConfig {
 
   if (!parsed.success) {
     console.error('❌ Erro nas variáveis de ambiente:');
-    console.error(parsed.error.format());
+    console.error(z.treeifyError(parsed.error));
     throw new Error('Configuração inválida.');
   }
 
