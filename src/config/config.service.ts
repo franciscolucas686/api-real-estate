@@ -29,27 +29,27 @@ export class ConfigService {
     return this.envConfig.JWT_REFRESH_SECRET;
   }
 
-  get corsOrigin(): string {
+  get corsOrigin(): string | undefined {
     return this.envConfig.CORS_ORIGIN;
   }
 
-  get r2AccountId(): string {
+  get r2AccountId(): string | undefined {
     return this.envConfig.R2_ACCOUNT_ID;
   }
 
-  get r2AccessKeyId(): string {
+  get r2AccessKeyId(): string | undefined {
     return this.envConfig.R2_ACCESS_KEY_ID;
   }
 
-  get r2SecretAccessKey(): string {
+  get r2SecretAccessKey(): string | undefined {
     return this.envConfig.R2_SECRET_ACCESS_KEY;
   }
 
-  get r2BucketName(): string {
+  get r2BucketName(): string | undefined {
     return this.envConfig.R2_BUCKET_NAME;
   }
 
-  get r2PublicBaseUrl(): string {
+  get r2PublicBaseUrl(): string | undefined {
     return this.envConfig.R2_PUBLIC_BASE_URL;
   }
 

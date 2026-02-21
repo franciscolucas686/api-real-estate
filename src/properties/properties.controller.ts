@@ -13,8 +13,16 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiConsumes } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import {
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUserDto } from '../auth/dto/current-user.dto';
 import { JwtGuard } from '../auth/guards/jwt.guard';
@@ -22,7 +30,6 @@ import { CreatePropertyDto } from './dto/create-property.dto';
 import { FilterPropertyDto } from './dto/filter-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 import { PropertiesService } from './properties.service';
-import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Properties')
 @Controller('properties')
@@ -33,6 +40,7 @@ export class PropertiesController {
   @HttpCode(201)
   @UseGuards(JwtGuard)
   @ApiOperation({ summary: 'Criar nova propriedade' })
+  @ApiBody({ type: CreatePropertyDto })
   @ApiResponse({ status: 201, description: 'Propriedade criada com sucesso' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
@@ -64,6 +72,7 @@ export class PropertiesController {
   @UseGuards(JwtGuard)
   @ApiOperation({ summary: 'Atualizar propriedade' })
   @ApiParam({ name: 'id', description: 'ID da propriedade' })
+  @ApiBody({ type: UpdatePropertyDto })
   @ApiResponse({ status: 200, description: 'Propriedade atualizada' })
   @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
@@ -97,6 +106,21 @@ export class PropertiesController {
     }),
   )
   @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        images: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+      required: ['images'],
+    },
+  })
   @ApiOperation({ summary: 'Upload de imagens para propriedade' })
   @ApiParam({ name: 'id', description: 'ID da propriedade' })
   @ApiResponse({ status: 201, description: 'Imagens enviadas com sucesso' })
