@@ -18,28 +18,14 @@ export class PropertiesService {
   ) {}
 
   async create(createPropertyDto: CreatePropertyDto, userId: string) {
-    const { businessTypeCodes, house, apartment, land, smallFarm, countryHouse, ...propertyData } =
-      createPropertyDto;
+    const { house, apartment, land, smallFarm, countryHouse, ...propertyData } = createPropertyDto;
 
     this.validateSubtypeData(createPropertyDto);
-
-    const businessTypes = await this.prisma.businessType.findMany({
-      where: { code: { in: businessTypeCodes } },
-    });
-
-    if (businessTypes.length !== businessTypeCodes.length) {
-      throw new BadRequestException('Um ou mais tipos de negócio informados são inválidos');
-    }
 
     return this.prisma.property.create({
       data: {
         ...propertyData,
         userId,
-        businessTypes: {
-          create: businessTypes.map((bt) => ({
-            businessTypeId: bt.id,
-          })),
-        },
         ...(house && { house: { create: house } }),
         ...(apartment && { apartment: { create: apartment } }),
         ...(land && { land: { create: land } }),
@@ -47,7 +33,6 @@ export class PropertiesService {
         ...(countryHouse && { countryhouse: { create: countryHouse } }),
       },
       include: {
-        businessTypes: { include: { businessType: true } },
         house: true,
         apartment: true,
         land: true,
@@ -101,11 +86,6 @@ export class PropertiesService {
         where,
         include: {
           images: true,
-          businessTypes: {
-            include: {
-              businessType: true,
-            },
-          },
         },
       }),
       this.prisma.property.count({ where }),
@@ -124,11 +104,6 @@ export class PropertiesService {
       where: { id },
       include: {
         images: true,
-        businessTypes: {
-          include: {
-            businessType: true,
-          },
-        },
         house: true,
         apartment: true,
         land: true,
@@ -356,13 +331,7 @@ export class PropertiesService {
     });
 
     if (filters.businessType) {
-      where.businessTypes = {
-        some: {
-          businessType: {
-            code: filters.businessType,
-          },
-        },
-      };
+      where.businessType = filters.businessType;
     }
 
     return where;
