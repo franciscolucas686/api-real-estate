@@ -1,59 +1,141 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "postgresql"
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model User {
-  id                    String    @id @default(uuid())
-  email                 String    @unique
+  id                    String     @id @default(uuid())
+  email                 String     @unique
   password              String
   name                  String?
-
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
   refreshToken          String?
   refreshTokenExpiresAt DateTime?
-
-  properties Property[]
+  properties            Property[]
 }
 
+model BusinessType {
+  id         String                 @id @default(uuid())
+  code       BusinessCode           @unique
+  name       String
+  createdAt  DateTime               @default(now())
+  properties PropertyBusinessType[]
+}
+
+model PropertyBusinessType {
+  id             String       @id @default(uuid())
+  propertyId     String
+  businessTypeId String
+  businessType   BusinessType @relation(fields: [businessTypeId], references: [id], onDelete: Cascade)
+  property       Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, businessTypeId])
+}
+
+model Property {
+  id            String                 @id @default(uuid())
+  code          String                 @unique
+  title         String
+  description   String
+  type          PropertyType
+  status        PropertyStatus
+  price         Decimal
+  rentPrice     Decimal?
+  condoFee      Decimal?
+  totalArea     Float?
+  builtArea     Float?
+  bedrooms      Int?
+  bathrooms     Int?
+  parkingSpaces Int?
+  state         String
+  city          String
+  neighborhood  String
+  coverImage    String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  deletedAt     DateTime?
+  userId        String
+  apartment     Apartment?
+  countryhouse  CountryHouse?
+  house         House?
+  land          Land?
+  user          User                   @relation(fields: [userId], references: [id])
+  businessTypes PropertyBusinessType[]
+  images        PropertyImage[]
+  smallfarm     SmallFarm?
+
+  @@index([type, status])
+  @@index([city, neighborhood])
+}
+
+model PropertyImage {
+  id         String   @id @default(uuid())
+  propertyId String
+  url        String
+  createdAt  DateTime @default(now())
+  isMain     Boolean  @default(false)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
+model House {
+  id                   String   @id @default(uuid())
+  propertyId           String   @unique
+  floors               Int
+  isInCondominium      Boolean?
+  condominiumName      String?
+  condominiumAmenities String?
+  property             Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model Apartment {
+  id          String      @id @default(uuid())
+  propertyId  String      @unique
+  floor       Int
+  hasElevator Boolean
+  hasBalcony  Boolean
+  sunPosition SunPosition
+  hasPool     Boolean?
+  property    Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model Land {
+  id         String     @id @default(uuid())
+  propertyId String     @unique
+  zoning     Zoning
+  topography Topography
+  property   Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model SmallFarm {
+  id            String      @id @default(uuid())
+  propertyId    String      @unique
+  hasHouse      Boolean
+  hasPool       Boolean
+  hasLake       Boolean
+  hasFruitTrees Boolean
+  waterSource   WaterSource
+  property      Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model CountryHouse {
+  id         String   @id @default(uuid())
+  propertyId String   @unique
+  hasRiver   Boolean
+  hasSpring  Boolean
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
 
 enum BusinessCode {
   RENT
   SALE_DIRECT
   SALE_FINANCING
   EXCHANGE
-}
-
-model BusinessType {
-  id        String        @id @default(uuid())
-  code      BusinessCode  @unique
-  name      String
-
-  properties PropertyBusinessType[]
-
-  createdAt DateTime @default(now())
-}
-
-model PropertyBusinessType {
-  id              String @id @default(uuid())
-  propertyId      String
-  businessTypeId  String
-
-  property        Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  businessType    BusinessType @relation(fields: [businessTypeId], references: [id], onDelete: Cascade)
-
-  @@unique([propertyId, businessTypeId])
 }
 
 enum PropertyType {
@@ -89,125 +171,7 @@ enum Topography {
 }
 
 enum WaterSource {
-  WELL        // Poço
-  SPRING      // Nascente
-  MAINS       // Rede (distribuição pública)
-}
-
-model Property {
-  id            String         @id @default(uuid())
-  code          String         @unique
-  title         String
-  description   String
-  type          PropertyType
-  status        PropertyStatus
-
-  price         Decimal
-  rentPrice     Decimal?
-  condoFee      Decimal?
-
-  totalArea     Float?
-  builtArea     Float?
-
-  bedrooms      Int?
-  bathrooms     Int?
-  parkingSpaces Int?
-
-  state         String
-  city          String
-  neighborhood  String
-
-  coverImage    String?
-
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  deletedAt     DateTime?
-
-  userId       String 
-  user         User     @relation(fields: [userId], references: [id])
-
-  images        PropertyImage[]
-
-  house         House?
-  apartment     Apartment?
-  land          Land?
-  smallfarm    SmallFarm?
-  countryhouse CountryHouse?
-
-  businessTypes PropertyBusinessType[]
-
-  @@index([type, status])
-  @@index([city, neighborhood])
-}
-
-model PropertyImage {
-  id          String   @id @default(uuid())
-  propertyId  String
-  url         String
-  isMain      Boolean  @default(false)
-  
-  createdAt   DateTime @default(now())
-
-  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  @@index([propertyId])
-}
-
-
-model House {
-  id               String   @id @default(uuid())
-  propertyId       String   @unique
-
-  floors           Int
-  isInCondominium  Boolean?
-
-  condominiumName  String?
-  condominiumAmenities String?
-
-  property         Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-}
-
-model Apartment {
-  id           String      @id @default(uuid())
-  propertyId   String      @unique
-
-  floor        Int
-  hasElevator  Boolean
-  hasBalcony   Boolean
-  sunPosition  SunPosition
-  hasPool      Boolean?
-
-  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-}
-
-model Land {
-  id           String     @id @default(uuid())
-  propertyId   String     @unique
-
-  zoning       Zoning
-  topography   Topography
-
-  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-}
-
-model SmallFarm {
-  id           String      @id @default(uuid())
-  propertyId   String      @unique
-
-  hasHouse     Boolean
-  hasPool      Boolean
-  hasLake      Boolean
-  hasFruitTrees Boolean
-  waterSource  WaterSource
-
-  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-}
-
-model CountryHouse {
-  id               String   @id @default(uuid())
-  propertyId       String   @unique
-
-  hasRiver         Boolean
-  hasSpring        Boolean
-  property         Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  WELL
+  SPRING
+  MAINS
 }

@@ -1,7 +1,22 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PropertyStatus, PropertyType } from '@prisma/client';
+import { BusinessCode, PropertyStatus, PropertyType } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsEnum, IsNumber, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
+import { CreateApartmentDto } from './create-apartment.dto';
+import { CreateCountryHouseDto } from './create-country-house.dto';
+import { CreateHouseDto } from './create-house.dto';
+import { CreateLandDto } from './create-land.dto';
+import { CreateSmallFarmDto } from './create-small-farm.dto';
 
 export class CreatePropertyDto {
   @ApiProperty({ example: 'Casa Moderna no Brooklin', description: 'Título da propriedade' })
@@ -107,4 +122,51 @@ export class CreatePropertyDto {
   @IsString({ message: 'Código deve ser uma string' })
   @MinLength(1, { message: 'Código deve ter no mínimo 1 carácter' })
   code: string;
+
+  @ApiProperty({
+    enum: BusinessCode,
+    isArray: true,
+    example: [BusinessCode.SALE_DIRECT, BusinessCode.RENT],
+    description: 'Tipos de negócio da propriedade',
+  })
+  @IsArray({ message: 'businessTypeCodes deve ser um array' })
+  @ArrayNotEmpty({ message: 'businessTypeCodes não pode ser vazio' })
+  @IsEnum(BusinessCode, { each: true, message: 'Código de tipo de negócio inválido' })
+  businessTypeCodes: BusinessCode[];
+
+  @ApiPropertyOptional({ type: CreateHouseDto, description: 'Dados específicos de casa' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateHouseDto)
+  house?: CreateHouseDto;
+
+  @ApiPropertyOptional({
+    type: CreateApartmentDto,
+    description: 'Dados específicos de apartamento',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateApartmentDto)
+  apartment?: CreateApartmentDto;
+
+  @ApiPropertyOptional({ type: CreateLandDto, description: 'Dados específicos de terreno' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateLandDto)
+  land?: CreateLandDto;
+
+  @ApiPropertyOptional({ type: CreateSmallFarmDto, description: 'Dados específicos de chácara' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateSmallFarmDto)
+  smallFarm?: CreateSmallFarmDto;
+
+  @ApiPropertyOptional({
+    type: CreateCountryHouseDto,
+    description: 'Dados específicos de sítio/casa de campo',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateCountryHouseDto)
+  countryHouse?: CreateCountryHouseDto;
 }
