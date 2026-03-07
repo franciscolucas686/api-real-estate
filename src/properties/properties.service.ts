@@ -1,5 +1,5 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma, PropertyImage } from '@prisma/client';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Prisma, PropertyImage, PropertyType } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { PrismaService } from '../prisma/prisma.service';
@@ -18,12 +18,71 @@ export class PropertiesService {
   ) {}
 
   async create(createPropertyDto: CreatePropertyDto, userId: string) {
+    const { businessTypeCodes, house, apartment, land, smallFarm, countryHouse, ...propertyData } =
+      createPropertyDto;
+
+    this.validateSubtypeData(createPropertyDto);
+
+    const businessTypes = await this.prisma.businessType.findMany({
+      where: { code: { in: businessTypeCodes } },
+    });
+
+    if (businessTypes.length !== businessTypeCodes.length) {
+      throw new BadRequestException('Um ou mais tipos de negócio informados são inválidos');
+    }
+
     return this.prisma.property.create({
       data: {
-        ...createPropertyDto,
+        ...propertyData,
         userId,
+        businessTypes: {
+          create: businessTypes.map((bt) => ({
+            businessTypeId: bt.id,
+          })),
+        },
+        ...(house && { house: { create: house } }),
+        ...(apartment && { apartment: { create: apartment } }),
+        ...(land && { land: { create: land } }),
+        ...(smallFarm && { smallfarm: { create: smallFarm } }),
+        ...(countryHouse && { countryhouse: { create: countryHouse } }),
+      },
+      include: {
+        businessTypes: { include: { businessType: true } },
+        house: true,
+        apartment: true,
+        land: true,
+        smallfarm: true,
+        countryhouse: true,
       },
     });
+  }
+
+  private validateSubtypeData(dto: CreatePropertyDto) {
+    const subtypeMap: Record<PropertyType, { field: string; data: unknown }> = {
+      [PropertyType.HOUSE]: { field: 'house', data: dto.house },
+      [PropertyType.APARTMENT]: { field: 'apartment', data: dto.apartment },
+      [PropertyType.LAND]: { field: 'land', data: dto.land },
+      [PropertyType.SMALL_FARM]: { field: 'smallFarm', data: dto.smallFarm },
+      [PropertyType.COUNTRY_HOUSE]: { field: 'countryHouse', data: dto.countryHouse },
+    };
+
+    const expected = subtypeMap[dto.type];
+
+    if (!expected.data) {
+      throw new BadRequestException(
+        `Para o tipo ${dto.type}, o campo "${expected.field}" é obrigatório`,
+      );
+    }
+
+    const otherSubtypes = Object.entries(subtypeMap).filter(([type]) => type !== dto.type);
+
+    for (const [, { field, data }] of otherSubtypes) {
+      if (data) {
+        throw new BadRequestException(
+          `O campo "${field}" não deve ser enviado para o tipo ${dto.type}`,
+        );
+      }
+    }
   }
 
   async findAll(filters: FilterPropertyDto = {}) {
