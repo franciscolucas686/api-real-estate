@@ -18,30 +18,15 @@ model User {
   properties            Property[]
 }
 
-model BusinessType {
-  id         String                 @id @default(uuid())
-  code       BusinessCode           @unique
-  name       String
-  createdAt  DateTime               @default(now())
-  properties PropertyBusinessType[]
-}
 
-model PropertyBusinessType {
-  id             String       @id @default(uuid())
-  propertyId     String
-  businessTypeId String
-  businessType   BusinessType @relation(fields: [businessTypeId], references: [id], onDelete: Cascade)
-  property       Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  @@unique([propertyId, businessTypeId])
-}
 
 model Property {
-  id            String                 @id @default(uuid())
-  code          String                 @unique
+  id            String         @id @default(uuid())
+  code          String         @unique
   title         String
   description   String
   type          PropertyType
+  businessType  BusinessCode
   status        PropertyStatus
   price         Decimal
   rentPrice     Decimal?
@@ -55,16 +40,15 @@ model Property {
   city          String
   neighborhood  String
   coverImage    String?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   deletedAt     DateTime?
   userId        String
   apartment     Apartment?
   countryhouse  CountryHouse?
   house         House?
   land          Land?
-  user          User                   @relation(fields: [userId], references: [id])
-  businessTypes PropertyBusinessType[]
+  user          User           @relation(fields: [userId], references: [id])
   images        PropertyImage[]
   smallfarm     SmallFarm?
 
