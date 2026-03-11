@@ -5,8 +5,8 @@ import {
   Delete,
   Get,
   HttpCode,
-  NotFoundException,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -27,21 +27,19 @@ import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUserDto } from '../auth/dto/current-user.dto';
 import { JwtGuard } from '../auth/guards/jwt.guard';
-import {
-  ImageNotBelongToPropertyError,
-  ImageNotFoundError,
-  InvalidSubtypeDataError,
-  PropertyNotFoundError,
-} from '../common/errors';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { FilterPropertyDto } from './dto/filter-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
+import { PropertyImagesService } from './property-images.service';
 import { PropertiesService } from './properties.service';
 
 @ApiTags('Properties')
 @Controller('properties')
 export class PropertiesController {
-  constructor(private readonly propertiesService: PropertiesService) {}
+  constructor(
+    private readonly propertiesService: PropertiesService,
+    private readonly propertyImagesService: PropertyImagesService,
+  ) {}
 
   @Post()
   @HttpCode(201)
@@ -52,14 +50,7 @@ export class PropertiesController {
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
   async create(@Body() createPropertyDto: CreatePropertyDto, @CurrentUser() user: CurrentUserDto) {
-    try {
-      return await this.propertiesService.create(createPropertyDto, user.id);
-    } catch (error) {
-      if (error instanceof InvalidSubtypeDataError) {
-        throw new BadRequestException(error.message);
-      }
-      throw error;
-    }
+    return this.propertiesService.create(createPropertyDto, user.id);
   }
 
   @Throttle({ default: { ttl: 60, limit: 60 } })
@@ -77,15 +68,8 @@ export class PropertiesController {
   @ApiParam({ name: 'id', description: 'ID da propriedade' })
   @ApiResponse({ status: 200, description: 'Propriedade encontrada' })
   @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
-  async findOne(@Param('id') id: string) {
-    try {
-      return await this.propertiesService.findOne(id);
-    } catch (error) {
-      if (error instanceof PropertyNotFoundError) {
-        throw new NotFoundException(error.message);
-      }
-      throw error;
-    }
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.propertiesService.findOne(id);
   }
 
   @Throttle({ default: { ttl: 3600, limit: 60 } })
@@ -98,18 +82,11 @@ export class PropertiesController {
   @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() updatePropertyDto: UpdatePropertyDto,
     @CurrentUser() user: CurrentUserDto,
   ) {
-    try {
-      return await this.propertiesService.update(id, updatePropertyDto);
-    } catch (error) {
-      if (error instanceof PropertyNotFoundError) {
-        throw new NotFoundException(error.message);
-      }
-      throw error;
-    }
+    return this.propertiesService.update(id, updatePropertyDto);
   }
 
   @Throttle({ default: { ttl: 60, limit: 30 } })
@@ -121,18 +98,11 @@ export class PropertiesController {
   @ApiResponse({ status: 204, description: 'Propriedade deletada' })
   @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async remove(@Param('id') id: string, @CurrentUser() user: CurrentUserDto) {
-    try {
-      await this.propertiesService.remove(id, user.id);
-    } catch (error) {
-      if (error instanceof PropertyNotFoundError) {
-        throw new NotFoundException(error.message);
-      }
-      throw error;
-    }
+  async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: CurrentUserDto) {
+    await this.propertiesService.remove(id, user.id);
   }
 
-  @Post(':id/images')
+  @Post(':propertyId/images')
   @HttpCode(201)
   @UseGuards(JwtGuard)
   @UseInterceptors(
@@ -157,12 +127,12 @@ export class PropertiesController {
     },
   })
   @ApiOperation({ summary: 'Upload de imagens para propriedade' })
-  @ApiParam({ name: 'id', description: 'ID da propriedade' })
+  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
   @ApiResponse({ status: 201, description: 'Imagens enviadas com sucesso' })
   @ApiResponse({ status: 400, description: 'Nenhuma imagem foi enviada' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   async uploadImages(
-    @Param('id') propertyId: string,
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @UploadedFiles() files: Express.Multer.File[],
     @CurrentUser() user: CurrentUserDto,
   ) {
@@ -170,7 +140,7 @@ export class PropertiesController {
       throw new BadRequestException('Nenhuma imagem foi enviada');
     }
 
-    return this.propertiesService.uploadImages(propertyId, files);
+    return this.propertyImagesService.uploadImages(propertyId, files);
   }
 
   @Patch(':propertyId/images/:imageId/set-main')
@@ -182,40 +152,28 @@ export class PropertiesController {
   @ApiResponse({ status: 404, description: 'Imagem não encontrada' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   async setMainImage(
-    @Param('propertyId') propertyId: string,
-    @Param('imageId') imageId: string,
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
     @CurrentUser() user: CurrentUserDto,
   ) {
-    try {
-      return await this.propertiesService.setMainImage(propertyId, imageId);
-    } catch (error) {
-      if (error instanceof ImageNotFoundError) {
-        throw new NotFoundException(error.message);
-      }
-      if (error instanceof ImageNotBelongToPropertyError) {
-        throw new BadRequestException(error.message);
-      }
-      throw error;
-    }
+    return this.propertyImagesService.setMainImage(propertyId, imageId);
   }
 
   @Throttle({ default: { ttl: 3600, limit: 30 } })
-  @Delete('images/:imageId')
+  @Delete(':propertyId/images/:imageId')
   @HttpCode(204)
   @UseGuards(JwtGuard)
   @ApiOperation({ summary: 'Deletar imagem de propriedade' })
+  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
   @ApiParam({ name: 'imageId', description: 'ID da imagem' })
   @ApiResponse({ status: 204, description: 'Imagem deletada' })
   @ApiResponse({ status: 404, description: 'Imagem não encontrada' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async deleteImage(@Param('imageId') imageId: string, @CurrentUser() user: CurrentUserDto) {
-    try {
-      await this.propertiesService.deleteImage(imageId, user.id);
-    } catch (error) {
-      if (error instanceof ImageNotFoundError || error instanceof PropertyNotFoundError) {
-        throw new NotFoundException(error.message);
-      }
-      throw error;
-    }
+  async deleteImage(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+    @CurrentUser() user: CurrentUserDto,
+  ) {
+    await this.propertyImagesService.deleteImage(imageId, user.id);
   }
 }

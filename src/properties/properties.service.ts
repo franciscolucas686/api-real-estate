@@ -1,26 +1,19 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Prisma, PropertyImage, PropertyType } from '@prisma/client';
-import { randomUUID } from 'crypto';
-import sharp from 'sharp';
-import {
-  ImageNotBelongToPropertyError,
-  ImageNotFoundError,
-  InvalidSubtypeDataError,
-  PropertyNotFoundError,
-} from '../common/errors';
+import { Injectable } from '@nestjs/common';
+import { Prisma, PropertyType } from '@prisma/client';
+import { InvalidSubtypeDataError, PropertyNotFoundError } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
-import { R2Service } from '../r2/r2.service';
-import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { FilterPropertyDto } from './dto/filter-property.dto';
+import { PropertyImagesService } from './property-images.service';
+import { PropertyWhatsappService } from './property-whatsapp.service';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 
 @Injectable()
 export class PropertiesService {
   constructor(
-    private prisma: PrismaService,
-    private r2: R2Service,
-    private whatsapp: WhatsappService,
+    private readonly prisma: PrismaService,
+    private readonly propertyImagesService: PropertyImagesService,
+    private readonly propertyWhatsappService: PropertyWhatsappService,
   ) {}
 
   async create(createPropertyDto: CreatePropertyDto, userId: string) {
@@ -122,7 +115,7 @@ export class PropertiesService {
       throw new PropertyNotFoundError(id);
     }
 
-    const whatsappNumber = this.whatsapp.getWhatsappNumber(id);
+    const whatsappNumber = this.propertyWhatsappService.getWhatsappNumber(id);
 
     return {
       ...property,
@@ -154,140 +147,12 @@ export class PropertiesService {
       throw new PropertyNotFoundError(id);
     }
 
-    await this.deletePropertyImagesFromR2(property.images);
+    await this.propertyImagesService.deleteImagesFromR2(property.images);
 
     return this.prisma.property.update({
       where: { id },
       data: { deletedAt: new Date() },
     });
-  }
-
-  async uploadImages(
-    propertyId: string,
-    files: Express.Multer.File[],
-  ): Promise<{
-    images: PropertyImage[];
-    mainImage: PropertyImage;
-    total: number;
-  }> {
-    const imageCount = await this.prisma.propertyImage.count({ where: { propertyId } });
-    const isFirstBatch = imageCount === 0;
-
-    const processedImages = await Promise.all(
-      files.map(async (file, index) => ({
-        file,
-        isMain: isFirstBatch && index === 0,
-      })),
-    );
-
-    const uploadedImages = await Promise.all(
-      processedImages.map(({ file, isMain }) =>
-        this.processAndUploadImage(propertyId, file, isMain),
-      ),
-    );
-
-    return {
-      images: uploadedImages,
-      mainImage: uploadedImages[0],
-      total: uploadedImages.length,
-    };
-  }
-
-  private readonly logger = new Logger(PropertiesService.name);
-
-  private async processAndUploadImage(
-    propertyId: string,
-    file: Express.Multer.File,
-    isMain: boolean,
-  ): Promise<PropertyImage> {
-    try {
-      const compressedBuffer = await sharp(file.buffer)
-        .resize(1920, 1080, {
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .jpeg({ quality: 80 })
-        .toBuffer();
-
-      const key = `real-estate-properties/${propertyId}-${Date.now()}-${randomUUID()}.jpg`;
-      const url = await this.r2.uploadImage(compressedBuffer, key, 'image/jpeg');
-
-      const image = await this.prisma.propertyImage.create({
-        data: { propertyId, url, isMain },
-      });
-
-      return image;
-    } catch (error) {
-      this.logger.error(`Erro ao processar imagem para propriedade ${propertyId}:`, error);
-      throw error;
-    }
-  }
-
-  async setMainImage(propertyId: string, imageId: string): Promise<PropertyImage> {
-    const image = await this.prisma.propertyImage.findUnique({
-      where: { id: imageId },
-    });
-
-    if (!image) {
-      throw new ImageNotFoundError(imageId);
-    }
-
-    if (image.propertyId !== propertyId) {
-      throw new ImageNotBelongToPropertyError(imageId, propertyId);
-    }
-
-    await Promise.all([
-      this.prisma.propertyImage.updateMany({
-        where: {
-          propertyId,
-          id: { not: imageId },
-          isMain: true,
-        },
-        data: { isMain: false },
-      }),
-      this.prisma.propertyImage.update({
-        where: { id: imageId },
-        data: { isMain: true },
-      }),
-    ]);
-
-    const updatedImage = await this.prisma.propertyImage.findUnique({
-      where: { id: imageId },
-    });
-
-    if (!updatedImage) {
-      throw new ImageNotFoundError(imageId);
-    }
-
-    return updatedImage;
-  }
-
-  async deleteImage(imageId: string, userId: string) {
-    const image = await this.prisma.propertyImage.findUnique({
-      where: { id: imageId },
-    });
-
-    if (!image) {
-      throw new ImageNotFoundError(imageId);
-    }
-
-    const property = await this.prisma.property.findUnique({
-      where: { id: image.propertyId },
-    });
-
-    if (!property) {
-      throw new PropertyNotFoundError(image.propertyId);
-    }
-
-    await this.deletePropertyImagesFromR2([image]);
-
-    return this.prisma.propertyImage.delete({
-      where: { id: imageId },
-    });
-  }
-
-  getWhatsappNumber(propertyId: string): string {
-    return this.whatsapp.getWhatsappNumber(propertyId);
   }
 
   private buildWhereClause(filters: Partial<FilterPropertyDto>): Prisma.PropertyWhereInput {
@@ -343,20 +208,5 @@ export class PropertiesService {
     }
 
     return where;
-  }
-
-  private async deletePropertyImagesFromR2(images: PropertyImage[]) {
-    const deletePromises = images.map((image) => this.deleteImageFromR2(image));
-
-    await Promise.allSettled(deletePromises);
-  }
-
-  private async deleteImageFromR2(image: PropertyImage): Promise<void> {
-    try {
-      const key = this.r2.getObjectKeyFromUrl(image.url);
-      await this.r2.deleteImage(key);
-    } catch (error) {
-      this.logger.warn(`Erro ao deletar imagem ${image.id} do R2:`, error);
-    }
   }
 }
