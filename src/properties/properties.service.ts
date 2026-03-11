@@ -1,7 +1,13 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, PropertyImage, PropertyType } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
+import {
+  ImageNotBelongToPropertyError,
+  ImageNotFoundError,
+  InvalidSubtypeDataError,
+  PropertyNotFoundError,
+} from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../r2/r2.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
@@ -54,7 +60,7 @@ export class PropertiesService {
     const expected = subtypeMap[dto.type];
 
     if (!expected.data) {
-      throw new BadRequestException(
+      throw new InvalidSubtypeDataError(
         `Para o tipo ${dto.type}, o campo "${expected.field}" é obrigatório`,
       );
     }
@@ -63,7 +69,7 @@ export class PropertiesService {
 
     for (const [, { field, data }] of otherSubtypes) {
       if (data) {
-        throw new BadRequestException(
+        throw new InvalidSubtypeDataError(
           `O campo "${field}" não deve ser enviado para o tipo ${dto.type}`,
         );
       }
@@ -113,7 +119,7 @@ export class PropertiesService {
     });
 
     if (!property) {
-      throw new NotFoundException(`Propriedade com ID ${id} não encontrada`);
+      throw new PropertyNotFoundError(id);
     }
 
     const whatsappNumber = this.whatsapp.getWhatsappNumber(id);
@@ -131,8 +137,10 @@ export class PropertiesService {
         data: updatePropertyDto,
       });
     } catch (error) {
-      this.logger.error(`Erro ao atualizar propriedade ${id}:`, error);
-      throw new NotFoundException(`Propriedade com ID ${id} não encontrada`);
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new PropertyNotFoundError(id);
+      }
+      throw error;
     }
   }
 
@@ -143,7 +151,7 @@ export class PropertiesService {
     });
 
     if (!property) {
-      throw new NotFoundException(`Propriedade com ID ${id} não encontrada`);
+      throw new PropertyNotFoundError(id);
     }
 
     await this.deletePropertyImagesFromR2(property.images);
@@ -221,11 +229,11 @@ export class PropertiesService {
     });
 
     if (!image) {
-      throw new NotFoundException(`Imagem com ID ${imageId} não encontrada`);
+      throw new ImageNotFoundError(imageId);
     }
 
     if (image.propertyId !== propertyId) {
-      throw new NotFoundException(`Imagem com ID ${imageId} não pertence ao imóvel ${propertyId}`);
+      throw new ImageNotBelongToPropertyError(imageId, propertyId);
     }
 
     await Promise.all([
@@ -248,7 +256,7 @@ export class PropertiesService {
     });
 
     if (!updatedImage) {
-      throw new NotFoundException(`Imagem com ID ${imageId} não encontrada`);
+      throw new ImageNotFoundError(imageId);
     }
 
     return updatedImage;
@@ -260,7 +268,7 @@ export class PropertiesService {
     });
 
     if (!image) {
-      throw new NotFoundException(`Imagem com ID ${imageId} não encontrada`);
+      throw new ImageNotFoundError(imageId);
     }
 
     const property = await this.prisma.property.findUnique({
@@ -268,7 +276,7 @@ export class PropertiesService {
     });
 
     if (!property) {
-      throw new NotFoundException(`Propriedade com ID ${image.propertyId} não encontrada`);
+      throw new PropertyNotFoundError(image.propertyId);
     }
 
     await this.deletePropertyImagesFromR2([image]);

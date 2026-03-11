@@ -1,6 +1,11 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import {
+  EmailAlreadyExistsError,
+  InvalidCredentialsError,
+  UserNotFoundError,
+} from '../common/errors';
 import { ConfigService } from '../config/config.service';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
@@ -19,7 +24,7 @@ export class AuthService {
 
     const existingUser = await this.usersService.findByEmail(email);
     if (existingUser) {
-      throw new BadRequestException('Email já cadastrado');
+      throw new EmailAlreadyExistsError();
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -43,12 +48,12 @@ export class AuthService {
 
     const user = await this.usersService.findByEmail(email);
     if (!user) {
-      throw new UnauthorizedException('Email ou senha inválidos');
+      throw new InvalidCredentialsError();
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Email ou senha inválidos');
+      throw new InvalidCredentialsError();
     }
 
     const tokens = await this.generateTokens(user.id, user.email);
@@ -66,7 +71,7 @@ export class AuthService {
   async refreshToken(userId: string) {
     const user = await this.usersService.findById(userId);
     if (!user) {
-      throw new UnauthorizedException('Usuário não encontrado');
+      throw new UserNotFoundError();
     }
 
     const tokens = await this.generateTokens(user.id, user.email);
