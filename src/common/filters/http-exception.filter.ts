@@ -8,6 +8,12 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
+interface HttpExceptionResponseBody {
+  statusCode?: number;
+  message: string | string[];
+  error?: string;
+}
+
 interface ErrorResponse {
   statusCode: number;
   timestamp: string;
@@ -35,7 +41,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const exceptionResponse = exception.getResponse();
 
       if (typeof exceptionResponse === 'object') {
-        const responseObj = exceptionResponse as any;
+        const responseObj = exceptionResponse as HttpExceptionResponseBody;
         message = responseObj.message || 'Erro na requisição';
         errorType = responseObj.error || exception.name;
       } else {
@@ -43,16 +49,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
         errorType = exception.name;
       }
     } else if (exception instanceof Error) {
-      message = exception.message;
-      errorType = exception.name;
-
       this.logger.error(
-        `[${errorType}] ${message}`,
+        `[${exception.name}] ${exception.message}`,
         exception.stack,
         `${request.method} ${request.path}`,
       );
     } else {
-      message = 'Erro desconhecido';
       this.logger.error(
         `Erro desconhecido: ${JSON.stringify(exception)}`,
         undefined,

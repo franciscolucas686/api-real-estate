@@ -1,6 +1,22 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Res,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
+import {
+  EmailAlreadyExistsError,
+  InvalidCredentialsError,
+  UserNotFoundError,
+} from '../common/errors';
 import { ConfigService } from '../config/config.service';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -50,14 +66,21 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Email já cadastrado' })
   async register(@Body() registerDto: RegisterDto, @Res({ passthrough: true }) response: Response) {
-    const result = await this.authService.register(registerDto);
+    try {
+      const result = await this.authService.register(registerDto);
 
-    this.setAuthCookies(response, result.accessToken, result.refreshToken);
+      this.setAuthCookies(response, result.accessToken, result.refreshToken);
 
-    return {
-      accessToken: result.accessToken,
-      user: result.user,
-    };
+      return {
+        accessToken: result.accessToken,
+        user: result.user,
+      };
+    } catch (error) {
+      if (error instanceof EmailAlreadyExistsError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
   }
 
   @Post('login')
@@ -76,14 +99,21 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Email ou senha inválidos' })
   async login(@Body() loginDto: LoginDto, @Res({ passthrough: true }) response: Response) {
-    const result = await this.authService.login(loginDto);
+    try {
+      const result = await this.authService.login(loginDto);
 
-    this.setAuthCookies(response, result.accessToken, result.refreshToken);
+      this.setAuthCookies(response, result.accessToken, result.refreshToken);
 
-    return {
-      accessToken: result.accessToken,
-      user: result.user,
-    };
+      return {
+        accessToken: result.accessToken,
+        user: result.user,
+      };
+    } catch (error) {
+      if (error instanceof InvalidCredentialsError) {
+        throw new UnauthorizedException(error.message);
+      }
+      throw error;
+    }
   }
 
   @Post('refresh')
@@ -104,13 +134,20 @@ export class AuthController {
     @CurrentUser() user: CurrentUserDto,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const result = await this.authService.refreshToken(user.id);
+    try {
+      const result = await this.authService.refreshToken(user.id);
 
-    this.setAuthCookies(response, result.accessToken, result.refreshToken);
+      this.setAuthCookies(response, result.accessToken, result.refreshToken);
 
-    return {
-      accessToken: result.accessToken,
-    };
+      return {
+        accessToken: result.accessToken,
+      };
+    } catch (error) {
+      if (error instanceof UserNotFoundError) {
+        throw new UnauthorizedException(error.message);
+      }
+      throw error;
+    }
   }
 
   @Get('me')
