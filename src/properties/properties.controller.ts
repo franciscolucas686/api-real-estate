@@ -27,6 +27,7 @@ import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUserDto } from '../auth/dto/current-user.dto';
 import { JwtGuard } from '../auth/guards/jwt.guard';
+import { CacheKey, CacheTTL, InvalidateCache } from '../common/decorators/cache.decorator';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { FilterPropertyDto } from './dto/filter-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
@@ -44,6 +45,7 @@ export class PropertiesController {
   @Post()
   @HttpCode(201)
   @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
   @ApiOperation({ summary: 'Criar nova propriedade' })
   @ApiBody({ type: CreatePropertyDto })
   @ApiResponse({ status: 201, description: 'Propriedade criada com sucesso' })
@@ -55,6 +57,8 @@ export class PropertiesController {
 
   @Throttle({ default: { ttl: 60, limit: 60 } })
   @Get()
+  @CacheTTL(300_000)
+  @CacheKey('properties-list')
   @ApiOperation({ summary: 'Listar propriedades com filtros' })
   @ApiResponse({ status: 200, description: 'Lista de propriedades retornada' })
   @ApiResponse({ status: 400, description: 'Filtros inválidos' })
@@ -64,6 +68,8 @@ export class PropertiesController {
 
   @Throttle({ default: { ttl: 60, limit: 120 } })
   @Get(':id')
+  @CacheTTL(600_000)
+  @CacheKey('properties-detail')
   @ApiOperation({ summary: 'Obter detalhes de uma propriedade' })
   @ApiParam({ name: 'id', description: 'ID da propriedade' })
   @ApiResponse({ status: 200, description: 'Propriedade encontrada' })
@@ -75,6 +81,7 @@ export class PropertiesController {
   @Throttle({ default: { ttl: 3600, limit: 60 } })
   @Patch(':id')
   @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
   @ApiOperation({ summary: 'Atualizar propriedade' })
   @ApiParam({ name: 'id', description: 'ID da propriedade' })
   @ApiBody({ type: UpdatePropertyDto })
@@ -93,6 +100,7 @@ export class PropertiesController {
   @Delete(':id')
   @HttpCode(204)
   @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
   @ApiOperation({ summary: 'Deletar propriedade' })
   @ApiParam({ name: 'id', description: 'ID da propriedade' })
   @ApiResponse({ status: 204, description: 'Propriedade deletada' })
@@ -105,6 +113,7 @@ export class PropertiesController {
   @Post(':propertyId/images')
   @HttpCode(201)
   @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
   @UseInterceptors(
     FilesInterceptor('images', 20, {
       limits: { files: 20 },
@@ -145,6 +154,7 @@ export class PropertiesController {
 
   @Patch(':propertyId/images/:imageId/set-main')
   @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
   @ApiOperation({ summary: 'Definir imagem como principal' })
   @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
   @ApiParam({ name: 'imageId', description: 'ID da imagem' })
@@ -163,6 +173,7 @@ export class PropertiesController {
   @Delete(':propertyId/images/:imageId')
   @HttpCode(204)
   @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
   @ApiOperation({ summary: 'Deletar imagem de propriedade' })
   @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
   @ApiParam({ name: 'imageId', description: 'ID da imagem' })
