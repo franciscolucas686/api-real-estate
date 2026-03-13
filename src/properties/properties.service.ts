@@ -2,10 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, PropertyType } from '@prisma/client';
 import { InvalidSubtypeDataError, PropertyNotFoundError } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { FilterPropertyDto } from './dto/filter-property.dto';
 import { PropertyImagesService } from './property-images.service';
-import { PropertyWhatsappService } from './property-whatsapp.service';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 
 @Injectable()
@@ -13,7 +13,7 @@ export class PropertiesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly propertyImagesService: PropertyImagesService,
-    private readonly propertyWhatsappService: PropertyWhatsappService,
+    private readonly whatsappService: WhatsappService,
   ) {}
 
   async create(createPropertyDto: CreatePropertyDto, userId: string) {
@@ -115,7 +115,7 @@ export class PropertiesService {
       throw new PropertyNotFoundError(id);
     }
 
-    const whatsappNumber = this.propertyWhatsappService.getWhatsappNumber(id);
+    const whatsappNumber = this.whatsappService.getWhatsappNumber(id);
 
     return {
       ...property,
