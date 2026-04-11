@@ -8,15 +8,15 @@ export class CreateApartmentDto {
   @IsInt({ message: 'Andar deve ser um número inteiro' })
   @Min(0, { message: 'Andar não pode ser negativo' })
   @Type(() => Number)
-  floor: number;
+  floor!: number;
 
   @ApiProperty({ example: true, description: 'Se tem elevador' })
   @IsBoolean({ message: 'hasElevator deve ser um booleano' })
-  hasElevator: boolean;
+  hasElevator!: boolean;
 
   @ApiProperty({ example: true, description: 'Se tem varanda' })
   @IsBoolean({ message: 'hasBalcony deve ser um booleano' })
-  hasBalcony: boolean;
+  hasBalcony!: boolean;
 
   @ApiProperty({
     enum: SunPosition,
@@ -24,7 +24,7 @@ export class CreateApartmentDto {
     description: 'Posição do sol (MORNING ou AFTERNOON)',
   })
   @IsEnum(SunPosition, { message: 'Posição do sol inválida' })
-  sunPosition: SunPosition;
+  sunPosition!: SunPosition;
 
   @ApiPropertyOptional({ example: true, description: 'Se tem piscina' })
   @IsOptional()
