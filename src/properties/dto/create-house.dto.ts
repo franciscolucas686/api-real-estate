@@ -7,7 +7,7 @@ export class CreateHouseDto {
   @IsInt({ message: 'Andares deve ser um número inteiro' })
   @Min(1, { message: 'Andares deve ser no mínimo 1' })
   @Type(() => Number)
-  floors: number;
+  floors!: number;
 
   @ApiPropertyOptional({ example: true, description: 'Se está em condomínio' })
   @IsOptional()

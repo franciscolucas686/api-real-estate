@@ -9,7 +9,7 @@ export class CreateLandDto {
     description: 'Zoneamento (RESIDENTIAL, COMMERCIAL, MIXED)',
   })
   @IsEnum(Zoning, { message: 'Zoneamento inválido' })
-  zoning: Zoning;
+  zoning!: Zoning;
 
   @ApiProperty({
     enum: Topography,
@@ -17,5 +17,5 @@ export class CreateLandDto {
     description: 'Topografia (FLAT, ACCLIVITY, DECLIVITY)',
   })
   @IsEnum(Topography, { message: 'Topografia inválida' })
-  topography: Topography;
+  topography!: Topography;
 }
