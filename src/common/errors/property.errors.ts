@@ -25,6 +25,22 @@ export class ImageNotBelongToPropertyError extends DomainError {
   }
 }
 
+export class RoomNotFoundError extends DomainError {
+  readonly statusCode = HttpStatus.NOT_FOUND;
+
+  constructor(id: string) {
+    super(`Cômodo com ID ${id} não encontrado`);
+  }
+}
+
+export class RoomNotBelongToPropertyError extends DomainError {
+  readonly statusCode = HttpStatus.BAD_REQUEST;
+
+  constructor(roomId: string, propertyId: string) {
+    super(`Cômodo com ID ${roomId} não pertence ao imóvel ${propertyId}`);
+  }
+}
+
 export class InvalidSubtypeDataError extends DomainError {
   readonly statusCode = HttpStatus.BAD_REQUEST;
 

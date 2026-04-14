@@ -84,7 +84,10 @@ export class PropertiesService {
         take,
         where,
         include: {
-          images: true,
+          images: {
+            orderBy: { order: 'asc' },
+            take: 5,
+          },
         },
       }),
       this.prisma.property.count({ where }),
@@ -102,7 +105,17 @@ export class PropertiesService {
     const property = await this.prisma.property.findUnique({
       where: { id },
       include: {
-        images: true,
+        images: {
+          orderBy: { order: 'asc' },
+        },
+        rooms: {
+          orderBy: { order: 'asc' },
+          include: {
+            images: {
+              orderBy: { order: 'asc' },
+            },
+          },
+        },
         house: true,
         apartment: true,
         land: true,
@@ -117,9 +130,15 @@ export class PropertiesService {
 
     const whatsappNumber = this.whatsappService.getWhatsappNumber(id);
 
+    const unassignedImages = property.images.filter((img) => !img.roomId);
+
     return {
       ...property,
       whatsappContact: whatsappNumber,
+      gallery: {
+        unassigned: unassignedImages,
+        rooms: property.rooms,
+      },
     };
   }
 

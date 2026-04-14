@@ -6,9 +6,12 @@ import {
   ImageNotBelongToPropertyError,
   ImageNotFoundError,
   PropertyNotFoundError,
+  RoomNotBelongToPropertyError,
 } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../r2/r2.service';
+import { ReorderImagesDto } from './dto/reorder-images.dto';
+import { UpdatePropertyImageDto } from './dto/update-property-image.dto';
 
 @Injectable()
 export class PropertyImagesService {
@@ -22,24 +25,40 @@ export class PropertyImagesService {
   async uploadImages(
     propertyId: string,
     files: Express.Multer.File[],
+    roomId?: string,
   ): Promise<{
     images: PropertyImage[];
     mainImage: PropertyImage;
     total: number;
   }> {
+    if (roomId) {
+      const room = await this.prisma.propertyRoom.findUnique({
+        where: { id: roomId },
+      });
+      if (!room || room.propertyId !== propertyId) {
+        throw new RoomNotBelongToPropertyError(roomId, propertyId);
+      }
+    }
+
     const imageCount = await this.prisma.propertyImage.count({ where: { propertyId } });
     const isFirstBatch = imageCount === 0;
 
-    const processedImages = await Promise.all(
-      files.map(async (file, index) => ({
-        file,
-        isMain: isFirstBatch && index === 0,
-      })),
-    );
+    const lastImage = await this.prisma.propertyImage.findFirst({
+      where: { propertyId },
+      orderBy: { order: 'desc' },
+    });
+    const startOrder = (lastImage?.order ?? -1) + 1;
+
+    const processedImages = files.map((file, index) => ({
+      file,
+      isMain: isFirstBatch && index === 0,
+      order: startOrder + index,
+      roomId: roomId ?? null,
+    }));
 
     const uploadedImages = await Promise.all(
-      processedImages.map(({ file, isMain }) =>
-        this.processAndUploadImage(propertyId, file, isMain),
+      processedImages.map(({ file, isMain, order, roomId }) =>
+        this.processAndUploadImage(propertyId, file, isMain, order, roomId),
       ),
     );
 
@@ -48,6 +67,67 @@ export class PropertyImagesService {
       mainImage: uploadedImages[0],
       total: uploadedImages.length,
     };
+  }
+
+  async updateImage(
+    propertyId: string,
+    imageId: string,
+    dto: UpdatePropertyImageDto,
+  ): Promise<PropertyImage> {
+    const image = await this.prisma.propertyImage.findUnique({
+      where: { id: imageId },
+    });
+
+    if (!image) {
+      throw new ImageNotFoundError(imageId);
+    }
+
+    if (image.propertyId !== propertyId) {
+      throw new ImageNotBelongToPropertyError(imageId, propertyId);
+    }
+
+    if (dto.roomId) {
+      const room = await this.prisma.propertyRoom.findUnique({
+        where: { id: dto.roomId },
+      });
+      if (!room || room.propertyId !== propertyId) {
+        throw new RoomNotBelongToPropertyError(dto.roomId, propertyId);
+      }
+    }
+
+    return this.prisma.propertyImage.update({
+      where: { id: imageId },
+      data: {
+        ...(dto.label !== undefined && { label: dto.label }),
+        ...(dto.order !== undefined && { order: dto.order }),
+        ...(dto.roomId !== undefined && { roomId: dto.roomId }),
+      },
+    });
+  }
+
+  async reorderImages(propertyId: string, dto: ReorderImagesDto): Promise<PropertyImage[]> {
+    const imageIds = dto.items.map((item) => item.imageId);
+    const images = await this.prisma.propertyImage.findMany({
+      where: { id: { in: imageIds }, propertyId },
+    });
+
+    if (images.length !== imageIds.length) {
+      throw new ImageNotBelongToPropertyError('uma ou mais imagens', propertyId);
+    }
+
+    await this.prisma.$transaction(
+      dto.items.map((item) =>
+        this.prisma.propertyImage.update({
+          where: { id: item.imageId },
+          data: { order: item.order },
+        }),
+      ),
+    );
+
+    return this.prisma.propertyImage.findMany({
+      where: { propertyId },
+      orderBy: { order: 'asc' },
+    });
   }
 
   async setMainImage(propertyId: string, imageId: string): Promise<PropertyImage> {
@@ -122,6 +202,8 @@ export class PropertyImagesService {
     propertyId: string,
     file: Express.Multer.File,
     isMain: boolean,
+    order: number,
+    roomId: string | null,
   ): Promise<PropertyImage> {
     const compressedBuffer = await sharp(file.buffer)
       .resize(1920, 1080, {
@@ -135,7 +217,7 @@ export class PropertyImagesService {
     const url = await this.r2.uploadImage(compressedBuffer, key, 'image/jpeg');
 
     return this.prisma.propertyImage.create({
-      data: { propertyId, url, isMain },
+      data: { propertyId, url, isMain, order, roomId },
     });
   }
 

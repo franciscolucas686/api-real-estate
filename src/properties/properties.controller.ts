@@ -28,10 +28,17 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUserDto } from '../auth/dto/current-user.dto';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 import { CacheKey, CacheTTL, InvalidateCache } from '../common/decorators/cache.decorator';
+import { AssignImagesToRoomDto } from './dto/assign-images-to-room.dto';
 import { CreatePropertyDto } from './dto/create-property.dto';
+import { CreatePropertyRoomDto } from './dto/create-property-room.dto';
 import { FilterPropertyDto } from './dto/filter-property.dto';
+import { ReorderImagesDto } from './dto/reorder-images.dto';
+import { ReorderRoomsDto } from './dto/reorder-rooms.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
+import { UpdatePropertyImageDto } from './dto/update-property-image.dto';
+import { UpdatePropertyRoomDto } from './dto/update-property-room.dto';
 import { PropertyImagesService } from './property-images.service';
+import { PropertyRoomsService } from './property-rooms.service';
 import { PropertiesService } from './properties.service';
 
 @ApiTags('Properties')
@@ -40,6 +47,7 @@ export class PropertiesController {
   constructor(
     private readonly propertiesService: PropertiesService,
     private readonly propertyImagesService: PropertyImagesService,
+    private readonly propertyRoomsService: PropertyRoomsService,
   ) {}
 
   @Post()
@@ -131,6 +139,11 @@ export class PropertiesController {
             format: 'binary',
           },
         },
+        roomId: {
+          type: 'string',
+          format: 'uuid',
+          description: 'ID do comodo para associar as imagens (opcional)',
+        },
       },
       required: ['images'],
     },
@@ -143,13 +156,14 @@ export class PropertiesController {
   async uploadImages(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @UploadedFiles() files: Express.Multer.File[],
+    @Body('roomId') roomId: string | undefined,
     @CurrentUser() user: CurrentUserDto,
   ) {
     if (!files?.length) {
       throw new BadRequestException('Nenhuma imagem foi enviada');
     }
 
-    return this.propertyImagesService.uploadImages(propertyId, files);
+    return this.propertyImagesService.uploadImages(propertyId, files, roomId);
   }
 
   @Patch(':propertyId/images/:imageId/set-main')
@@ -186,5 +200,140 @@ export class PropertiesController {
     @CurrentUser() user: CurrentUserDto,
   ) {
     await this.propertyImagesService.deleteImage(imageId, user.id);
+  }
+
+  // === ROOM ENDPOINTS ===
+
+  @Post(':propertyId/rooms')
+  @HttpCode(201)
+  @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
+  @ApiOperation({ summary: 'Criar comodo para propriedade' })
+  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
+  @ApiBody({ type: CreatePropertyRoomDto })
+  @ApiResponse({ status: 201, description: 'Comodo criado com sucesso' })
+  @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async createRoom(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Body() dto: CreatePropertyRoomDto,
+    @CurrentUser() user: CurrentUserDto,
+  ) {
+    return this.propertyRoomsService.createRoom(propertyId, dto);
+  }
+
+  @Get(':propertyId/rooms')
+  @ApiOperation({ summary: 'Listar comodos da propriedade com imagens' })
+  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
+  @ApiResponse({ status: 200, description: 'Lista de comodos' })
+  async findRooms(@Param('propertyId', ParseUUIDPipe) propertyId: string) {
+    return this.propertyRoomsService.findRoomsByProperty(propertyId);
+  }
+
+  @Patch(':propertyId/rooms/reorder')
+  @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
+  @ApiOperation({ summary: 'Reordenar comodos' })
+  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
+  @ApiBody({ type: ReorderRoomsDto })
+  @ApiResponse({ status: 200, description: 'Comodos reordenados' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async reorderRooms(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Body() dto: ReorderRoomsDto,
+    @CurrentUser() user: CurrentUserDto,
+  ) {
+    return this.propertyRoomsService.reorderRooms(propertyId, dto);
+  }
+
+  @Patch(':propertyId/rooms/:roomId')
+  @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
+  @ApiOperation({ summary: 'Atualizar comodo' })
+  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
+  @ApiParam({ name: 'roomId', description: 'ID do comodo' })
+  @ApiBody({ type: UpdatePropertyRoomDto })
+  @ApiResponse({ status: 200, description: 'Comodo atualizado' })
+  @ApiResponse({ status: 404, description: 'Comodo não encontrado' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async updateRoom(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @Body() dto: UpdatePropertyRoomDto,
+    @CurrentUser() user: CurrentUserDto,
+  ) {
+    return this.propertyRoomsService.updateRoom(propertyId, roomId, dto);
+  }
+
+  @Delete(':propertyId/rooms/:roomId')
+  @HttpCode(204)
+  @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
+  @ApiOperation({ summary: 'Deletar comodo (imagens mantidas sem associacao)' })
+  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
+  @ApiParam({ name: 'roomId', description: 'ID do comodo' })
+  @ApiResponse({ status: 204, description: 'Comodo deletado' })
+  @ApiResponse({ status: 404, description: 'Comodo não encontrado' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async deleteRoom(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @CurrentUser() user: CurrentUserDto,
+  ) {
+    await this.propertyRoomsService.deleteRoom(propertyId, roomId);
+  }
+
+  // === IMAGE METADATA ENDPOINTS ===
+
+  @Patch(':propertyId/images/reorder')
+  @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
+  @ApiOperation({ summary: 'Reordenar imagens' })
+  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
+  @ApiBody({ type: ReorderImagesDto })
+  @ApiResponse({ status: 200, description: 'Imagens reordenadas' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async reorderImages(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Body() dto: ReorderImagesDto,
+    @CurrentUser() user: CurrentUserDto,
+  ) {
+    return this.propertyImagesService.reorderImages(propertyId, dto);
+  }
+
+  @Post(':propertyId/images/assign-room')
+  @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
+  @ApiOperation({ summary: 'Associar multiplas imagens a um comodo' })
+  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
+  @ApiBody({ type: AssignImagesToRoomDto })
+  @ApiResponse({ status: 200, description: 'Imagens associadas ao comodo' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async assignImagesToRoom(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Body() dto: AssignImagesToRoomDto,
+    @CurrentUser() user: CurrentUserDto,
+  ) {
+    await this.propertyRoomsService.assignImagesToRoom(propertyId, dto);
+    return { success: true };
+  }
+
+  @Patch(':propertyId/images/:imageId')
+  @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
+  @ApiOperation({ summary: 'Atualizar metadados da imagem' })
+  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
+  @ApiParam({ name: 'imageId', description: 'ID da imagem' })
+  @ApiBody({ type: UpdatePropertyImageDto })
+  @ApiResponse({ status: 200, description: 'Imagem atualizada' })
+  @ApiResponse({ status: 404, description: 'Imagem não encontrada' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async updateImage(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+    @Body() dto: UpdatePropertyImageDto,
+    @CurrentUser() user: CurrentUserDto,
+  ) {
+    return this.propertyImagesService.updateImage(propertyId, imageId, dto);
   }
 }

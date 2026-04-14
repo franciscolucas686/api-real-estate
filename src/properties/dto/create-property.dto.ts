@@ -20,7 +20,7 @@ export class CreatePropertyDto {
   @ApiProperty({ example: 'Casa Moderna no Brooklin', description: 'Título da propriedade' })
   @IsString({ message: 'Título deve ser uma string' })
   @MinLength(3, { message: 'Título deve ter no mínimo 3 caracteres' })
-  title: string;
+  title!: string;
 
   @ApiProperty({
     example: 'Casa com 3 quartos, 2 banheiros e garagem para 2 carros',
@@ -28,11 +28,11 @@ export class CreatePropertyDto {
   })
   @IsString({ message: 'Descrição deve ser uma string' })
   @MinLength(10, { message: 'Descrição deve ter no mínimo 10 caracteres' })
-  description: string;
+  description!: string;
 
   @ApiProperty({ enum: PropertyType, example: PropertyType.HOUSE, description: 'Tipo do imóvel' })
   @IsEnum(PropertyType, { message: 'Tipo de propriedade inválido' })
-  type: PropertyType;
+  type!: PropertyType;
 
   @ApiProperty({
     enum: PropertyStatus,
@@ -40,13 +40,13 @@ export class CreatePropertyDto {
     description: 'Status atual do imóvel',
   })
   @IsEnum(PropertyStatus, { message: 'Status de propriedade inválido' })
-  status: PropertyStatus;
+  status!: PropertyStatus;
 
   @ApiProperty({ example: 750000, description: 'Preço de venda do imóvel', minimum: 0 })
   @IsNumber({}, { message: 'Preço deve ser um número' })
   @Min(0, { message: 'Preço não pode ser negativo' })
   @Type(() => Number)
-  price: number;
+  price!: number;
 
   @ApiPropertyOptional({
     example: 3500,
@@ -104,22 +104,22 @@ export class CreatePropertyDto {
   @ApiProperty({ example: 'SP', description: 'UF da propriedade', minLength: 2 })
   @IsString({ message: 'Estado deve ser uma string' })
   @MinLength(2, { message: 'Estado deve ter no mínimo 2 caracteres' })
-  state: string;
+  state!: string;
 
   @ApiProperty({ example: 'São Paulo', description: 'Cidade da propriedade', minLength: 2 })
   @IsString({ message: 'Cidade deve ser uma string' })
   @MinLength(2, { message: 'Cidade deve ter no mínimo 2 caracteres' })
-  city: string;
+  city!: string;
 
   @ApiProperty({ example: 'Brooklin', description: 'Bairro da propriedade', minLength: 2 })
   @IsString({ message: 'Bairro deve ser uma string' })
   @MinLength(2, { message: 'Bairro deve ter no mínimo 2 caracteres' })
-  neighborhood: string;
+  neighborhood!: string;
 
   @ApiProperty({ example: 'PROP001', description: 'Código único da propriedade', minLength: 1 })
   @IsString({ message: 'Código deve ser uma string' })
   @MinLength(1, { message: 'Código deve ter no mínimo 1 carácter' })
-  code: string;
+  code!: string;
 
   @ApiProperty({
     enum: BusinessCode,
@@ -127,7 +127,7 @@ export class CreatePropertyDto {
     description: 'Tipo de negócio da propriedade',
   })
   @IsEnum(BusinessCode, { message: 'Tipo de negócio inválido' })
-  businessType: BusinessCode;
+  businessType!: BusinessCode;
 
   @ApiPropertyOptional({ type: CreateHouseDto, description: 'Dados específicos de casa' })
   @IsOptional()
