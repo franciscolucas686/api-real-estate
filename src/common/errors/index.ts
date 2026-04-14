@@ -5,5 +5,7 @@ export {
   ImageNotFoundError,
   InvalidSubtypeDataError,
   PropertyNotFoundError,
+  RoomNotBelongToPropertyError,
+  RoomNotFoundError,
 } from './property.errors';
 export { StorageNotConfiguredError } from './storage.errors';

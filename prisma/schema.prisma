@@ -21,8 +21,8 @@ model User {
 
 
 model Property {
-  id            String         @id @default(uuid())
-  code          String         @unique
+  id            String          @id @default(uuid())
+  code          String          @unique
   title         String
   description   String
   type          PropertyType
@@ -40,31 +40,51 @@ model Property {
   city          String
   neighborhood  String
   coverImage    String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
   deletedAt     DateTime?
   userId        String
   apartment     Apartment?
   countryhouse  CountryHouse?
   house         House?
   land          Land?
-  user          User           @relation(fields: [userId], references: [id])
+  user          User            @relation(fields: [userId], references: [id])
   images        PropertyImage[]
+  rooms         PropertyRoom[]
   smallfarm     SmallFarm?
 
   @@index([type, status])
   @@index([city, neighborhood])
 }
 
-model PropertyImage {
-  id         String   @id @default(uuid())
+model PropertyRoom {
+  id         String          @id @default(uuid())
   propertyId String
-  url        String
-  createdAt  DateTime @default(now())
-  isMain     Boolean  @default(false)
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name       String
+  order      Int             @default(0)
+  createdAt  DateTime        @default(now())
+  property   Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  images     PropertyImage[]
 
   @@index([propertyId])
+  @@index([propertyId, order])
+}
+
+model PropertyImage {
+  id         String        @id @default(uuid())
+  propertyId String
+  roomId     String?
+  url        String
+  label      String?
+  order      Int           @default(0)
+  createdAt  DateTime      @default(now())
+  isMain     Boolean       @default(false)
+  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room       PropertyRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId])
+  @@index([roomId])
+  @@index([propertyId, order])
 }
 
 model House {
