@@ -3,10 +3,8 @@ import { Prisma, PropertyType } from '@prisma/client';
 import { InvalidSubtypeDataError, PropertyNotFoundError } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
-import { CreatePropertyDto } from './dto/create-property.dto';
-import { FilterPropertyDto } from './dto/filter-property.dto';
+import { CreatePropertyDto, FilterPropertyDto, UpdatePropertyDto } from './dto';
 import { PropertyImagesService } from './property-images.service';
-import { UpdatePropertyDto } from './dto/update-property.dto';
 
 @Injectable()
 export class PropertiesService {

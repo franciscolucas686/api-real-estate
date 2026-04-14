@@ -7,10 +7,12 @@ import {
   RoomNotFoundError,
 } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
-import { AssignImagesToRoomDto } from './dto/assign-images-to-room.dto';
-import { CreatePropertyRoomDto } from './dto/create-property-room.dto';
-import { ReorderRoomsDto } from './dto/reorder-rooms.dto';
-import { UpdatePropertyRoomDto } from './dto/update-property-room.dto';
+import {
+  AssignPropertyImagesToRoomDto,
+  CreatePropertyRoomDto,
+  ReorderPropertyRoomsDto,
+  UpdatePropertyRoomDto,
+} from './dto';
 
 @Injectable()
 export class PropertyRoomsService {
@@ -51,7 +53,7 @@ export class PropertyRoomsService {
     });
   }
 
-  async reorderRooms(propertyId: string, dto: ReorderRoomsDto): Promise<PropertyRoom[]> {
+  async reorderRooms(propertyId: string, dto: ReorderPropertyRoomsDto): Promise<PropertyRoom[]> {
     await this.ensurePropertyExists(propertyId);
 
     const roomIds = dto.items.map((item) => item.roomId);
@@ -78,7 +80,7 @@ export class PropertyRoomsService {
     });
   }
 
-  async assignImagesToRoom(propertyId: string, dto: AssignImagesToRoomDto): Promise<void> {
+  async assignImagesToRoom(propertyId: string, dto: AssignPropertyImagesToRoomDto): Promise<void> {
     await this.ensurePropertyExists(propertyId);
 
     if (dto.roomId) {

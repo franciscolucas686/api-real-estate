@@ -10,11 +10,13 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { CreateApartmentDto } from './create-apartment.dto';
-import { CreateCountryHouseDto } from './create-country-house.dto';
-import { CreateHouseDto } from './create-house.dto';
-import { CreateLandDto } from './create-land.dto';
-import { CreateSmallFarmDto } from './create-small-farm.dto';
+import {
+  CreateApartmentDto,
+  CreateCountryHouseDto,
+  CreateHouseDto,
+  CreateLandDto,
+  CreateSmallFarmDto,
+} from './subtypes';
 
 export class CreatePropertyDto {
   @ApiProperty({ example: 'Casa Moderna no Brooklin', description: 'Título da propriedade' })

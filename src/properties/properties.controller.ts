@@ -28,15 +28,17 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUserDto } from '../auth/dto/current-user.dto';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 import { CacheKey, CacheTTL, InvalidateCache } from '../common/decorators/cache.decorator';
-import { AssignImagesToRoomDto } from './dto/assign-images-to-room.dto';
-import { CreatePropertyDto } from './dto/create-property.dto';
-import { CreatePropertyRoomDto } from './dto/create-property-room.dto';
-import { FilterPropertyDto } from './dto/filter-property.dto';
-import { ReorderImagesDto } from './dto/reorder-images.dto';
-import { ReorderRoomsDto } from './dto/reorder-rooms.dto';
-import { UpdatePropertyDto } from './dto/update-property.dto';
-import { UpdatePropertyImageDto } from './dto/update-property-image.dto';
-import { UpdatePropertyRoomDto } from './dto/update-property-room.dto';
+import {
+  AssignPropertyImagesToRoomDto,
+  CreatePropertyDto,
+  CreatePropertyRoomDto,
+  FilterPropertyDto,
+  ReorderPropertyImagesDto,
+  ReorderPropertyRoomsDto,
+  UpdatePropertyDto,
+  UpdatePropertyImageDto,
+  UpdatePropertyRoomDto,
+} from './dto';
 import { PropertyImagesService } from './property-images.service';
 import { PropertyRoomsService } from './property-rooms.service';
 import { PropertiesService } from './properties.service';
@@ -235,12 +237,12 @@ export class PropertiesController {
   @InvalidateCache('/properties')
   @ApiOperation({ summary: 'Reordenar comodos' })
   @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
-  @ApiBody({ type: ReorderRoomsDto })
+  @ApiBody({ type: ReorderPropertyRoomsDto })
   @ApiResponse({ status: 200, description: 'Comodos reordenados' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   async reorderRooms(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
-    @Body() dto: ReorderRoomsDto,
+    @Body() dto: ReorderPropertyRoomsDto,
     @CurrentUser() user: CurrentUserDto,
   ) {
     return this.propertyRoomsService.reorderRooms(propertyId, dto);
@@ -290,12 +292,12 @@ export class PropertiesController {
   @InvalidateCache('/properties')
   @ApiOperation({ summary: 'Reordenar imagens' })
   @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
-  @ApiBody({ type: ReorderImagesDto })
+  @ApiBody({ type: ReorderPropertyImagesDto })
   @ApiResponse({ status: 200, description: 'Imagens reordenadas' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   async reorderImages(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
-    @Body() dto: ReorderImagesDto,
+    @Body() dto: ReorderPropertyImagesDto,
     @CurrentUser() user: CurrentUserDto,
   ) {
     return this.propertyImagesService.reorderImages(propertyId, dto);
@@ -306,12 +308,12 @@ export class PropertiesController {
   @InvalidateCache('/properties')
   @ApiOperation({ summary: 'Associar multiplas imagens a um comodo' })
   @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
-  @ApiBody({ type: AssignImagesToRoomDto })
+  @ApiBody({ type: AssignPropertyImagesToRoomDto })
   @ApiResponse({ status: 200, description: 'Imagens associadas ao comodo' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   async assignImagesToRoom(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
-    @Body() dto: AssignImagesToRoomDto,
+    @Body() dto: AssignPropertyImagesToRoomDto,
     @CurrentUser() user: CurrentUserDto,
   ) {
     await this.propertyRoomsService.assignImagesToRoom(propertyId, dto);

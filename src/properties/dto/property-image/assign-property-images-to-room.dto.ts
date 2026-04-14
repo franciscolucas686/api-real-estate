@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsArray, IsOptional, IsUUID } from 'class-validator';
 
-export class AssignImagesToRoomDto {
+export class AssignPropertyImagesToRoomDto {
   @ApiProperty({
     example: ['uuid1', 'uuid2'],
     description: 'IDs das imagens a serem associadas ao comodo',
