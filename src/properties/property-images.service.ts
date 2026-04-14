@@ -10,8 +10,7 @@ import {
 } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../r2/r2.service';
-import { ReorderImagesDto } from './dto/reorder-images.dto';
-import { UpdatePropertyImageDto } from './dto/update-property-image.dto';
+import { ReorderPropertyImagesDto, UpdatePropertyImageDto } from './dto';
 
 @Injectable()
 export class PropertyImagesService {
@@ -105,7 +104,7 @@ export class PropertyImagesService {
     });
   }
 
-  async reorderImages(propertyId: string, dto: ReorderImagesDto): Promise<PropertyImage[]> {
+  async reorderImages(propertyId: string, dto: ReorderPropertyImagesDto): Promise<PropertyImage[]> {
     const imageIds = dto.items.map((item) => item.imageId);
     const images = await this.prisma.propertyImage.findMany({
       where: { id: { in: imageIds }, propertyId },

@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsArray, IsInt, IsUUID, Min, ValidateNested } from 'class-validator';
 
-export class ImageOrderItemDto {
+export class PropertyImageOrderItemDto {
   @ApiProperty({ example: 'd3f5c93e-6db1-4c6c-9b53-26b8d8db8f09' })
   @IsUUID('4', { message: 'ID da imagem deve ser um UUID valido' })
   imageId!: string;
@@ -14,13 +14,13 @@ export class ImageOrderItemDto {
   order!: number;
 }
 
-export class ReorderImagesDto {
+export class ReorderPropertyImagesDto {
   @ApiProperty({
-    type: [ImageOrderItemDto],
+    type: [PropertyImageOrderItemDto],
     description: 'Lista de imagens com suas novas ordens',
   })
   @IsArray({ message: 'Items deve ser um array' })
   @ValidateNested({ each: true })
-  @Type(() => ImageOrderItemDto)
-  items!: ImageOrderItemDto[];
+  @Type(() => PropertyImageOrderItemDto)
+  items!: PropertyImageOrderItemDto[];
 }
