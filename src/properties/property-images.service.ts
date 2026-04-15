@@ -6,7 +6,6 @@ import {
   ImageNotBelongToPropertyError,
   ImageNotFoundError,
   PropertyNotFoundError,
-  RoomNotBelongToPropertyError,
 } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../r2/r2.service';
@@ -24,21 +23,11 @@ export class PropertyImagesService {
   async uploadImages(
     propertyId: string,
     files: Express.Multer.File[],
-    roomId?: string,
   ): Promise<{
     images: PropertyImage[];
     mainImage: PropertyImage;
     total: number;
   }> {
-    if (roomId) {
-      const room = await this.prisma.propertyRoom.findUnique({
-        where: { id: roomId },
-      });
-      if (!room || room.propertyId !== propertyId) {
-        throw new RoomNotBelongToPropertyError(roomId, propertyId);
-      }
-    }
-
     const imageCount = await this.prisma.propertyImage.count({ where: { propertyId } });
     const isFirstBatch = imageCount === 0;
 
@@ -52,12 +41,11 @@ export class PropertyImagesService {
       file,
       isMain: isFirstBatch && index === 0,
       order: startOrder + index,
-      roomId: roomId ?? null,
     }));
 
     const uploadedImages = await Promise.all(
-      processedImages.map(({ file, isMain, order, roomId }) =>
-        this.processAndUploadImage(propertyId, file, isMain, order, roomId),
+      processedImages.map(({ file, isMain, order }) =>
+        this.processAndUploadImage(propertyId, file, isMain, order),
       ),
     );
 
@@ -71,7 +59,7 @@ export class PropertyImagesService {
   async updateImage(
     propertyId: string,
     imageId: string,
-    dto: UpdatePropertyImageDto,
+    dto: Omit<UpdatePropertyImageDto, 'roomId'>,
   ): Promise<PropertyImage> {
     const image = await this.prisma.propertyImage.findUnique({
       where: { id: imageId },
@@ -85,21 +73,11 @@ export class PropertyImagesService {
       throw new ImageNotBelongToPropertyError(imageId, propertyId);
     }
 
-    if (dto.roomId) {
-      const room = await this.prisma.propertyRoom.findUnique({
-        where: { id: dto.roomId },
-      });
-      if (!room || room.propertyId !== propertyId) {
-        throw new RoomNotBelongToPropertyError(dto.roomId, propertyId);
-      }
-    }
-
     return this.prisma.propertyImage.update({
       where: { id: imageId },
       data: {
         ...(dto.label !== undefined && { label: dto.label }),
         ...(dto.order !== undefined && { order: dto.order }),
-        ...(dto.roomId !== undefined && { roomId: dto.roomId }),
       },
     });
   }
@@ -202,7 +180,6 @@ export class PropertyImagesService {
     file: Express.Multer.File,
     isMain: boolean,
     order: number,
-    roomId: string | null,
   ): Promise<PropertyImage> {
     const compressedBuffer = await sharp(file.buffer)
       .resize(1920, 1080, {
@@ -216,7 +193,7 @@ export class PropertyImagesService {
     const url = await this.r2.uploadImage(compressedBuffer, key, 'image/jpeg');
 
     return this.prisma.propertyImage.create({
-      data: { propertyId, url, isMain, order, roomId },
+      data: { propertyId, url, isMain, order },
     });
   }
 
