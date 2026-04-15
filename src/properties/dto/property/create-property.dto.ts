@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BusinessCode, PropertyStatus, PropertyType } from '@prisma/client';
+import { BusinessCode, PropertyType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
@@ -19,11 +19,6 @@ import {
 } from './subtypes';
 
 export class CreatePropertyDto {
-  @ApiProperty({ example: 'Casa Moderna no Brooklin', description: 'Título da propriedade' })
-  @IsString({ message: 'Título deve ser uma string' })
-  @MinLength(3, { message: 'Título deve ter no mínimo 3 caracteres' })
-  title!: string;
-
   @ApiProperty({
     example: 'Casa com 3 quartos, 2 banheiros e garagem para 2 carros',
     description: 'Descrição detalhada da propriedade',
@@ -35,14 +30,6 @@ export class CreatePropertyDto {
   @ApiProperty({ enum: PropertyType, example: PropertyType.HOUSE, description: 'Tipo do imóvel' })
   @IsEnum(PropertyType, { message: 'Tipo de propriedade inválido' })
   type!: PropertyType;
-
-  @ApiProperty({
-    enum: PropertyStatus,
-    example: PropertyStatus.AVAILABLE,
-    description: 'Status atual do imóvel',
-  })
-  @IsEnum(PropertyStatus, { message: 'Status de propriedade inválido' })
-  status!: PropertyStatus;
 
   @ApiProperty({ example: 750000, description: 'Preço de venda do imóvel', minimum: 0 })
   @IsNumber({}, { message: 'Preço deve ser um número' })

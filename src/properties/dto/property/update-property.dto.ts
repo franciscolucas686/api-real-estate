@@ -1,16 +1,10 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { PropertyStatus, PropertyType } from '@prisma/client';
+import { PropertyType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsEnum, IsNumber, IsOptional, IsString, Min, MinLength } from 'class-validator';
 import { CreatePropertyDto } from './create-property.dto';
 
 export class UpdatePropertyDto implements Partial<CreatePropertyDto> {
-  @ApiPropertyOptional({ example: 'Casa Moderna no Brooklin' })
-  @IsOptional()
-  @IsString({ message: 'Título deve ser uma string' })
-  @MinLength(3, { message: 'Título deve ter no mínimo 3 caracteres' })
-  title?: string;
-
   @ApiPropertyOptional({ example: 'Casa com acabamento premium e área gourmet' })
   @IsOptional()
   @IsString({ message: 'Descrição deve ser uma string' })
@@ -21,11 +15,6 @@ export class UpdatePropertyDto implements Partial<CreatePropertyDto> {
   @IsOptional()
   @IsEnum(PropertyType, { message: 'Tipo de propriedade inválido' })
   type?: PropertyType;
-
-  @ApiPropertyOptional({ enum: PropertyStatus, example: PropertyStatus.AVAILABLE })
-  @IsOptional()
-  @IsEnum(PropertyStatus, { message: 'Status de propriedade inválido' })
-  status?: PropertyStatus;
 
   @ApiPropertyOptional({ example: 750000, minimum: 0 })
   @IsOptional()

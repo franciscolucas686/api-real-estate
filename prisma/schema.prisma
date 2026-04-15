@@ -23,14 +23,13 @@ model User {
 model Property {
   id            String          @id @default(uuid())
   code          String          @unique
-  title         String
-  description   String
-  type          PropertyType
   businessType  BusinessCode
-  status        PropertyStatus
+  type          PropertyType
   price         Decimal
   rentPrice     Decimal?
   condoFee      Decimal?
+  images        PropertyImage[]
+  rooms         PropertyRoom[]
   totalArea     Float?
   builtArea     Float?
   bedrooms      Int?
@@ -39,6 +38,7 @@ model Property {
   state         String
   city          String
   neighborhood  String
+  description   String
   coverImage    String?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
@@ -48,12 +48,10 @@ model Property {
   countryhouse  CountryHouse?
   house         House?
   land          Land?
-  user          User            @relation(fields: [userId], references: [id])
-  images        PropertyImage[]
-  rooms         PropertyRoom[]
   smallfarm     SmallFarm?
+  user          User            @relation(fields: [userId], references: [id])
 
-  @@index([type, status])
+  @@index([type])
   @@index([city, neighborhood])
 }
 
@@ -78,7 +76,6 @@ model PropertyImage {
   label      String?
   order      Int           @default(0)
   createdAt  DateTime      @default(now())
-  isMain     Boolean       @default(false)
   property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   room       PropertyRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
 
@@ -148,13 +145,6 @@ enum PropertyType {
   LAND
   SMALL_FARM
   COUNTRY_HOUSE
-}
-
-enum PropertyStatus {
-  AVAILABLE
-  SOLD
-  RENTED
-  RESERVED
 }
 
 enum SunPosition {
