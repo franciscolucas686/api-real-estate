@@ -165,7 +165,14 @@ export class PropertiesController {
       throw new BadRequestException('Nenhuma imagem foi enviada');
     }
 
-    return this.propertyImagesService.uploadImages(propertyId, files, roomId);
+    const result = await this.propertyImagesService.uploadImages(propertyId, files);
+
+    if (roomId) {
+      const imageIds = result.images.map((img) => img.id);
+      await this.propertyRoomsService.assignImagesToRoom(propertyId, { imageIds, roomId });
+    }
+
+    return result;
   }
 
   @Patch(':propertyId/images/:imageId/set-main')
@@ -336,6 +343,15 @@ export class PropertiesController {
     @Body() dto: UpdatePropertyImageDto,
     @CurrentUser() user: CurrentUserDto,
   ) {
-    return this.propertyImagesService.updateImage(propertyId, imageId, dto);
+    const { roomId, ...imageData } = dto;
+
+    if (roomId !== undefined) {
+      await this.propertyRoomsService.assignImagesToRoom(propertyId, {
+        imageIds: [imageId],
+        roomId,
+      });
+    }
+
+    return this.propertyImagesService.updateImage(propertyId, imageId, imageData);
   }
 }
