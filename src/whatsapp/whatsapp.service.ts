@@ -1,16 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
-import { validateEnvConfig } from '../config/env.config';
+import { ConfigService } from '../config/config.service';
 
 @Injectable()
 export class WhatsappService {
   private whatsappA: string;
   private whatsappB: string;
 
-  constructor() {
-    const envConfig = validateEnvConfig();
-    this.whatsappA = envConfig.WHATSAPP_A;
-    this.whatsappB = envConfig.WHATSAPP_B;
+  constructor(private readonly configService: ConfigService) {
+    this.whatsappA = configService.whatsappA;
+    this.whatsappB = configService.whatsappB;
   }
 
   getWhatsappNumber(propertyId: string): string {

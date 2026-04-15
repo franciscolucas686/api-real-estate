@@ -1,7 +1,7 @@
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { Injectable } from '@nestjs/common';
 import { StorageNotConfiguredError } from '../common/errors';
-import { validateEnvConfig } from '../config/env.config';
+import { ConfigService } from '../config/config.service';
 
 @Injectable()
 export class R2Service {
@@ -10,26 +10,24 @@ export class R2Service {
   private readonly publicBaseUrl: string | null = null;
   private readonly isConfigured: boolean;
 
-  constructor() {
-    const envConfig = validateEnvConfig();
-
+  constructor(private readonly configService: ConfigService) {
     this.isConfigured =
-      !!envConfig.R2_ACCOUNT_ID &&
-      !!envConfig.R2_ACCESS_KEY_ID &&
-      !!envConfig.R2_SECRET_ACCESS_KEY &&
-      !!envConfig.R2_BUCKET_NAME &&
-      !!envConfig.R2_PUBLIC_BASE_URL;
+      !!configService.r2AccountId &&
+      !!configService.r2AccessKeyId &&
+      !!configService.r2SecretAccessKey &&
+      !!configService.r2BucketName &&
+      !!configService.r2PublicBaseUrl;
 
     if (this.isConfigured) {
-      this.bucketName = envConfig.R2_BUCKET_NAME!;
-      this.publicBaseUrl = this.normalizeBaseUrl(envConfig.R2_PUBLIC_BASE_URL!);
+      this.bucketName = configService.r2BucketName!;
+      this.publicBaseUrl = this.normalizeBaseUrl(configService.r2PublicBaseUrl!);
 
       this.client = new S3Client({
         region: 'auto',
-        endpoint: `https://${envConfig.R2_ACCOUNT_ID!}.r2.cloudflarestorage.com`,
+        endpoint: `https://${configService.r2AccountId!}.r2.cloudflarestorage.com`,
         credentials: {
-          accessKeyId: envConfig.R2_ACCESS_KEY_ID!,
-          secretAccessKey: envConfig.R2_SECRET_ACCESS_KEY!,
+          accessKeyId: configService.r2AccessKeyId!,
+          secretAccessKey: configService.r2SecretAccessKey!,
         },
       });
     }

@@ -1,8 +1,24 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from './prisma.service';
+import { AppConfigModule } from '../config/config.module';
+import { ConfigService } from '../config/config.service';
+import { PRISMA_DATABASE_URL, PrismaService } from './prisma.service';
 
 @Module({
-  providers: [PrismaService],
+  imports: [AppConfigModule],
+  providers: [
+    {
+      provide: PRISMA_DATABASE_URL,
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const databaseUrl = configService.databaseUrl;
+        if (!databaseUrl) {
+          throw new Error('DATABASE_URL é obrigatória para inicializar o PrismaClient.');
+        }
+        return databaseUrl;
+      },
+    },
+    PrismaService,
+  ],
   exports: [PrismaService],
 })
 export class PrismaModule {}

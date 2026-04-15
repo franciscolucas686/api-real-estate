@@ -21,6 +21,10 @@ export class ConfigService {
     return this.envConfig.PORT;
   }
 
+  get databaseUrl(): string | undefined {
+    return this.envConfig.DATABASE_URL;
+  }
+
   get jwtSecret(): string {
     return this.envConfig.JWT_SECRET;
   }

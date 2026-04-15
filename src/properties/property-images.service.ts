@@ -34,9 +34,7 @@ export class PropertyImagesService {
     const startOrder = (lastImage?.order ?? -1) + 1;
 
     const uploadedImages = await Promise.all(
-      files.map((file, index) =>
-        this.processAndUploadImage(propertyId, file, startOrder + index),
-      ),
+      files.map((file, index) => this.processAndUploadImage(propertyId, file, startOrder + index)),
     );
 
     return {

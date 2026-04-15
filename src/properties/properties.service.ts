@@ -119,8 +119,8 @@ export class PropertiesService {
   }
 
   async findOne(id: string) {
-    const property = await this.prisma.property.findUnique({
-      where: { id },
+    const property = await this.prisma.property.findFirst({
+      where: { id, deletedAt: null },
       include: {
         images: {
           orderBy: { order: 'asc' },
@@ -243,8 +243,6 @@ export class PropertiesService {
   }
 
   private extractPreviewImages(property: PropertyWithRooms): PropertyImage[] {
-    return property.rooms
-      .filter((room) => room.images.length > 0)
-      .map((room) => room.images[0]);
+    return property.rooms.filter((room) => room.images.length > 0).map((room) => room.images[0]);
   }
 }
