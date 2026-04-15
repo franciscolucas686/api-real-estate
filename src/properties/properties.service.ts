@@ -1,10 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, PropertyType } from '@prisma/client';
+import { Prisma, Property, PropertyImage, PropertyRoom, PropertyType } from '@prisma/client';
 import { InvalidSubtypeDataError, PropertyNotFoundError } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { CreatePropertyDto, FilterPropertyDto, UpdatePropertyDto } from './dto';
 import { PropertyImagesService } from './property-images.service';
+
+const PREVIEW_LIMIT_ROOMS = 4;
+
+type RoomWithImages = PropertyRoom & { images: PropertyImage[] };
+type PropertyWithRooms = Property & { rooms: RoomWithImages[] };
 
 @Injectable()
 export class PropertiesService {
@@ -82,17 +87,31 @@ export class PropertiesService {
         take,
         where,
         include: {
-          images: {
+          rooms: {
             orderBy: { order: 'asc' },
-            take: 5,
+            take: PREVIEW_LIMIT_ROOMS,
+            include: {
+              images: {
+                orderBy: { order: 'asc' },
+                take: 1,
+              },
+            },
           },
         },
       }),
       this.prisma.property.count({ where }),
     ]);
 
+    const data = properties.map((property) => {
+      const { rooms, ...rest } = property;
+      return {
+        ...rest,
+        previewImages: this.extractPreviewImages(property),
+      };
+    });
+
     return {
-      data: properties,
+      data,
       total,
       skip,
       take,
@@ -178,7 +197,6 @@ export class PropertiesService {
     };
 
     if (filters.type) where.type = filters.type;
-    if (filters.status) where.status = filters.status;
 
     if (filters.city) {
       where.city = { contains: filters.city, mode: 'insensitive' };
@@ -191,10 +209,7 @@ export class PropertiesService {
     }
 
     if (filters.search) {
-      where.OR = [
-        { title: { contains: filters.search, mode: 'insensitive' } },
-        { description: { contains: filters.search, mode: 'insensitive' } },
-      ];
+      where.description = { contains: filters.search, mode: 'insensitive' };
     }
 
     const rangeFilters = [
@@ -225,5 +240,11 @@ export class PropertiesService {
     }
 
     return where;
+  }
+
+  private extractPreviewImages(property: PropertyWithRooms): PropertyImage[] {
+    return property.rooms
+      .filter((room) => room.images.length > 0)
+      .map((room) => room.images[0]);
   }
 }

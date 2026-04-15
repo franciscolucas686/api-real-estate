@@ -25,33 +25,22 @@ export class PropertyImagesService {
     files: Express.Multer.File[],
   ): Promise<{
     images: PropertyImage[];
-    mainImage: PropertyImage;
     total: number;
   }> {
-    const imageCount = await this.prisma.propertyImage.count({ where: { propertyId } });
-    const isFirstBatch = imageCount === 0;
-
     const lastImage = await this.prisma.propertyImage.findFirst({
       where: { propertyId },
       orderBy: { order: 'desc' },
     });
     const startOrder = (lastImage?.order ?? -1) + 1;
 
-    const processedImages = files.map((file, index) => ({
-      file,
-      isMain: isFirstBatch && index === 0,
-      order: startOrder + index,
-    }));
-
     const uploadedImages = await Promise.all(
-      processedImages.map(({ file, isMain, order }) =>
-        this.processAndUploadImage(propertyId, file, isMain, order),
+      files.map((file, index) =>
+        this.processAndUploadImage(propertyId, file, startOrder + index),
       ),
     );
 
     return {
       images: uploadedImages,
-      mainImage: uploadedImages[0],
       total: uploadedImages.length,
     };
   }
@@ -107,45 +96,6 @@ export class PropertyImagesService {
     });
   }
 
-  async setMainImage(propertyId: string, imageId: string): Promise<PropertyImage> {
-    const image = await this.prisma.propertyImage.findUnique({
-      where: { id: imageId },
-    });
-
-    if (!image) {
-      throw new ImageNotFoundError(imageId);
-    }
-
-    if (image.propertyId !== propertyId) {
-      throw new ImageNotBelongToPropertyError(imageId, propertyId);
-    }
-
-    await Promise.all([
-      this.prisma.propertyImage.updateMany({
-        where: {
-          propertyId,
-          id: { not: imageId },
-          isMain: true,
-        },
-        data: { isMain: false },
-      }),
-      this.prisma.propertyImage.update({
-        where: { id: imageId },
-        data: { isMain: true },
-      }),
-    ]);
-
-    const updatedImage = await this.prisma.propertyImage.findUnique({
-      where: { id: imageId },
-    });
-
-    if (!updatedImage) {
-      throw new ImageNotFoundError(imageId);
-    }
-
-    return updatedImage;
-  }
-
   async deleteImage(imageId: string, userId: string) {
     const image = await this.prisma.propertyImage.findUnique({
       where: { id: imageId },
@@ -178,7 +128,6 @@ export class PropertyImagesService {
   private async processAndUploadImage(
     propertyId: string,
     file: Express.Multer.File,
-    isMain: boolean,
     order: number,
   ): Promise<PropertyImage> {
     const compressedBuffer = await sharp(file.buffer)
@@ -193,7 +142,7 @@ export class PropertyImagesService {
     const url = await this.r2.uploadImage(compressedBuffer, key, 'image/jpeg');
 
     return this.prisma.propertyImage.create({
-      data: { propertyId, url, isMain, order },
+      data: { propertyId, url, order },
     });
   }
 

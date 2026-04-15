@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { BusinessCode, PropertyStatus, PropertyType } from '@prisma/client';
+import { BusinessCode, PropertyType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import { IsEnum, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
@@ -8,11 +8,6 @@ export class FilterPropertyDto {
   @IsOptional()
   @IsEnum(PropertyType)
   type?: PropertyType;
-
-  @ApiPropertyOptional({ enum: PropertyStatus, example: PropertyStatus.AVAILABLE })
-  @IsOptional()
-  @IsEnum(PropertyStatus)
-  status?: PropertyStatus;
 
   @ApiPropertyOptional({ enum: BusinessCode, example: BusinessCode.RENT })
   @IsOptional()

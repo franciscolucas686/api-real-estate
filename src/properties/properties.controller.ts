@@ -175,23 +175,6 @@ export class PropertiesController {
     return result;
   }
 
-  @Patch(':propertyId/images/:imageId/set-main')
-  @UseGuards(JwtGuard)
-  @InvalidateCache('/properties')
-  @ApiOperation({ summary: 'Definir imagem como principal' })
-  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
-  @ApiParam({ name: 'imageId', description: 'ID da imagem' })
-  @ApiResponse({ status: 200, description: 'Imagem definida como principal' })
-  @ApiResponse({ status: 404, description: 'Imagem não encontrada' })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async setMainImage(
-    @Param('propertyId', ParseUUIDPipe) propertyId: string,
-    @Param('imageId', ParseUUIDPipe) imageId: string,
-    @CurrentUser() user: CurrentUserDto,
-  ) {
-    return this.propertyImagesService.setMainImage(propertyId, imageId);
-  }
-
   @Throttle({ default: { ttl: 3600, limit: 30 } })
   @Delete(':propertyId/images/:imageId')
   @HttpCode(204)
