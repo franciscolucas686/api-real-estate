@@ -32,28 +32,25 @@ export class CreatePropertyDto {
   type!: PropertyType;
 
   @ApiProperty({ example: 750000, description: 'Preço de venda do imóvel', minimum: 0 })
-  @IsNumber({}, { message: 'Preço deve ser um número' })
-  @Min(0, { message: 'Preço não pode ser negativo' })
-  @Type(() => Number)
-  price!: number;
+  @IsString({ message: 'Preço deve ser uma string' })
+  @IsDecimal({ force_decimal: true }, { message: 'Preço deve ser um valor decimal válido' })
+  price!: string;
 
   @ApiPropertyOptional({
-    example: 3500,
+    example: '3500.00',
     description: 'Preço de aluguel (quando aplicável)',
     minimum: 0,
   })
   @IsOptional()
-  @IsNumber({}, { message: 'Preço de aluguel deve ser um número' })
-  @Min(0, { message: 'Preço de aluguel não pode ser negativo' })
-  @Type(() => Number)
-  rentPrice?: number;
+  @IsString({ message: 'Preço de aluguel deve ser uma string' })
+  @IsDecimal({ force_decimal: true }, { message: 'Preço de aluguel deve ser um valor decimal válido' })
+  rentPrice?: string;
 
-  @ApiPropertyOptional({ example: 700, description: 'Taxa de condomínio', minimum: 0 })
+  @ApiPropertyOptional({ example: '700.00', description: 'Taxa de condomínio', minimum: 0 })
   @IsOptional()
-  @IsNumber({}, { message: 'Taxa de condomínio deve ser um número' })
-  @Min(0, { message: 'Taxa de condomínio não pode ser negativa' })
-  @Type(() => Number)
-  condoFee?: number;
+  @IsString({ message: 'Taxa de condomínio deve ser uma string' })
+  @IsDecimal({ force_decimal: true }, { message: 'Taxa de condomínio deve ser um valor decimal válido' })
+  condoFee?: string;
 
   @ApiPropertyOptional({ example: 250, description: 'Área total em m²', minimum: 0 })
   @IsOptional()

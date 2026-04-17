@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, Property, PropertyImage, PropertyRoom, PropertyType } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { InvalidSubtypeDataError, PropertyNotFoundError } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
@@ -28,6 +29,9 @@ export class PropertiesService {
       data: {
         ...propertyData,
         userId,
+        price: new Decimal(propertyData.price),
+        ...(propertyData.rentPrice && { rentPrice: new Decimal(propertyData.rentPrice) }),
+        ...(propertyData.condoFee && { condoFee: new Decimal(propertyData.condoFee) }),
         ...(house && { house: { create: house } }),
         ...(apartment && { apartment: { create: apartment } }),
         ...(land && { land: { create: land } }),
@@ -161,9 +165,22 @@ export class PropertiesService {
 
   async update(id: string, updatePropertyDto: UpdatePropertyDto) {
     try {
+      const data: Record<string, unknown> = { ...updatePropertyDto };
+
+      // Convert Decimal fields from string to Decimal
+      if (data.price && typeof data.price === 'string') {
+        data.price = new Decimal(data.price);
+      }
+      if (data.rentPrice && typeof data.rentPrice === 'string') {
+        data.rentPrice = new Decimal(data.rentPrice);
+      }
+      if (data.condoFee && typeof data.condoFee === 'string') {
+        data.condoFee = new Decimal(data.condoFee);
+      }
+
       return await this.prisma.property.update({
         where: { id },
-        data: updatePropertyDto,
+        data,
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {

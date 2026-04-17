@@ -29,19 +29,17 @@ export class FilterPropertyDto {
   @IsString()
   state?: string;
 
-  @ApiPropertyOptional({ example: 100000, minimum: 0 })
+  @ApiPropertyOptional({ example: '100000.00', minimum: 0 })
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  minPrice?: number;
+  @Type(() => String)
+  @IsDecimal({ force_decimal: true }, { message: 'Preço mínimo deve ser um valor decimal válido' })
+  minPrice?: string;
 
-  @ApiPropertyOptional({ example: 1200000, minimum: 0 })
+  @ApiPropertyOptional({ example: '1200000.00', minimum: 0 })
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  maxPrice?: number;
+  @Type(() => String)
+  @IsDecimal({ force_decimal: true }, { message: 'Preço máximo deve ser um valor decimal válido' })
+  maxPrice?: string;
 
   @ApiPropertyOptional({ example: 1, minimum: 0 })
   @IsOptional()
