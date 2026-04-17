@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Min,
   MinLength,
   ValidateNested,
@@ -31,25 +32,30 @@ export class CreatePropertyDto {
   @IsEnum(PropertyType, { message: 'Tipo de propriedade inválido' })
   type!: PropertyType;
 
-  @ApiProperty({ example: 750000, description: 'Preço de venda do imóvel', minimum: 0 })
+  @ApiProperty({ example: '750000.00', description: 'Preço de venda do imóvel' })
   @IsString({ message: 'Preço deve ser uma string' })
-  @IsDecimal({ force_decimal: true }, { message: 'Preço deve ser um valor decimal válido' })
+  @Matches(/^\d+(\.\d{1,2})?$/, {
+    message: 'Preço deve ser um número decimal válido (ex: 750000.00)',
+  })
   price!: string;
 
   @ApiPropertyOptional({
     example: '3500.00',
     description: 'Preço de aluguel (quando aplicável)',
-    minimum: 0,
   })
   @IsOptional()
   @IsString({ message: 'Preço de aluguel deve ser uma string' })
-  @IsDecimal({ force_decimal: true }, { message: 'Preço de aluguel deve ser um valor decimal válido' })
+  @Matches(/^\d+(\.\d{1,2})?$/, {
+    message: 'Preço de aluguel deve ser um número decimal válido (ex: 3500.00)',
+  })
   rentPrice?: string;
 
-  @ApiPropertyOptional({ example: '700.00', description: 'Taxa de condomínio', minimum: 0 })
+  @ApiPropertyOptional({ example: '700.00', description: 'Taxa de condomínio' })
   @IsOptional()
   @IsString({ message: 'Taxa de condomínio deve ser uma string' })
-  @IsDecimal({ force_decimal: true }, { message: 'Taxa de condomínio deve ser um valor decimal válido' })
+  @Matches(/^\d+(\.\d{1,2})?$/, {
+    message: 'Taxa de condomínio deve ser um número decimal válido (ex: 700.00)',
+  })
   condoFee?: string;
 
   @ApiPropertyOptional({ example: 250, description: 'Área total em m²', minimum: 0 })

@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { BusinessCode, PropertyType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
-import { IsEnum, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
 
 export class FilterPropertyDto {
   @ApiPropertyOptional({ enum: PropertyType, example: PropertyType.HOUSE })
@@ -32,13 +32,17 @@ export class FilterPropertyDto {
   @ApiPropertyOptional({ example: '100000.00', minimum: 0 })
   @IsOptional()
   @Type(() => String)
-  @IsDecimal({ force_decimal: true }, { message: 'Preço mínimo deve ser um valor decimal válido' })
+  @Matches(/^\d+(\.\d{1,2})?$/, {
+    message: 'Preço mínimo deve ser um número decimal válido (ex: 100000.00)',
+  })
   minPrice?: string;
 
   @ApiPropertyOptional({ example: '1200000.00', minimum: 0 })
   @IsOptional()
   @Type(() => String)
-  @IsDecimal({ force_decimal: true }, { message: 'Preço máximo deve ser um valor decimal válido' })
+  @Matches(/^\d+(\.\d{1,2})?$/, {
+    message: 'Preço máximo deve ser um número decimal válido (ex: 1200000.00)',
+  })
   maxPrice?: string;
 
   @ApiPropertyOptional({ example: 1, minimum: 0 })
