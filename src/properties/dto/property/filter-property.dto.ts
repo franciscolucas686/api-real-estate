@@ -1,7 +1,16 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { BusinessCode, PropertyType } from '@prisma/client';
+import { BusinessType, PropertyType, SaleType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
-import { IsEnum, IsNumber, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import {
+  IsArray,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class FilterPropertyDto {
   @ApiPropertyOptional({ enum: PropertyType, example: PropertyType.HOUSE })
@@ -9,10 +18,22 @@ export class FilterPropertyDto {
   @IsEnum(PropertyType)
   type?: PropertyType;
 
-  @ApiPropertyOptional({ enum: BusinessCode, example: BusinessCode.RENT })
+  @ApiPropertyOptional({ enum: BusinessType, example: BusinessType.SALE })
   @IsOptional()
-  @IsEnum(BusinessCode)
-  businessType?: BusinessCode;
+  @IsEnum(BusinessType)
+  businessType?: BusinessType;
+
+  @ApiPropertyOptional({
+    enum: SaleType,
+    isArray: true,
+    example: [SaleType.DIRECT],
+    description: 'Filtrar por tipos de venda',
+  })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? [value] : value))
+  @IsArray()
+  @IsEnum(SaleType, { each: true })
+  saleTypes?: SaleType[];
 
   @ApiPropertyOptional({ example: 'São Paulo' })
   @IsOptional()

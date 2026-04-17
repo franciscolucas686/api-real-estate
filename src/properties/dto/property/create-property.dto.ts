@@ -1,7 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BusinessCode, PropertyType } from '@prisma/client';
+import { BusinessType, PropertyType, SaleType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsEnum,
   IsNumber,
   IsOptional,
@@ -114,12 +115,23 @@ export class CreatePropertyDto {
   code!: string;
 
   @ApiProperty({
-    enum: BusinessCode,
-    example: BusinessCode.SALE_DIRECT,
-    description: 'Tipo de negócio da propriedade',
+    enum: BusinessType,
+    example: BusinessType.SALE,
+    description: 'Tipo de negócio (RENT ou SALE)',
   })
-  @IsEnum(BusinessCode, { message: 'Tipo de negócio inválido' })
-  businessType!: BusinessCode;
+  @IsEnum(BusinessType, { message: 'Tipo de negócio inválido. Use RENT ou SALE' })
+  businessType!: BusinessType;
+
+  @ApiPropertyOptional({
+    enum: SaleType,
+    isArray: true,
+    example: [SaleType.DIRECT, SaleType.FINANCING],
+    description: 'Tipos de venda (obrigatório se SALE, vazio se RENT)',
+  })
+  @IsOptional()
+  @IsArray({ message: 'saleTypes deve ser um array' })
+  @IsEnum(SaleType, { each: true, message: 'Tipo de venda inválido. Use DIRECT, FINANCING ou EXCHANGE' })
+  saleTypes?: SaleType[];
 
   @ApiPropertyOptional({ type: CreateHouseDto, description: 'Dados específicos de casa' })
   @IsOptional()

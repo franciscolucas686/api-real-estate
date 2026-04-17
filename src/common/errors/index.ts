@@ -3,6 +3,7 @@ export { EmailAlreadyExistsError, InvalidCredentialsError, UserNotFoundError } f
 export {
   ImageNotBelongToPropertyError,
   ImageNotFoundError,
+  InvalidBusinessTypeConfigError,
   InvalidSubtypeDataError,
   PropertyNotFoundError,
   RoomNotBelongToPropertyError,
