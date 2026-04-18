@@ -136,11 +136,6 @@ export class FilterPropertyDto {
   @Min(0)
   maxParkingSpaces?: number;
 
-  @ApiPropertyOptional({ example: 'casa com piscina' })
-  @IsOptional()
-  @IsString()
-  search?: string;
-
   @ApiPropertyOptional({ example: 0, minimum: 0, default: 0 })
   @IsOptional()
   @Type(() => Number)
