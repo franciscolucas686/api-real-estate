@@ -283,10 +283,6 @@ export class PropertiesService {
       where.state = { contains: filters.state, mode: 'insensitive' };
     }
 
-    if (filters.search) {
-      where.description = { contains: filters.search, mode: 'insensitive' };
-    }
-
     const rangeFilters = [
       { key: 'price', min: 'minPrice', max: 'maxPrice' },
       { key: 'totalArea', min: 'minTotalArea', max: 'maxTotalArea' },
