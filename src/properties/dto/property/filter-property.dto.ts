@@ -136,6 +136,16 @@ export class FilterPropertyDto {
   @Min(0)
   maxParkingSpaces?: number;
 
+  @ApiPropertyOptional({
+    enum: ['newest', 'oldest'],
+    example: 'newest',
+    default: 'newest',
+    description: 'Sort order: newest (default) or oldest',
+  })
+  @IsOptional()
+  @IsEnum(['newest', 'oldest'] as const)
+  sort?: 'newest' | 'oldest';
+
   @ApiPropertyOptional({ example: 0, minimum: 0, default: 0 })
   @IsOptional()
   @Type(() => Number)
