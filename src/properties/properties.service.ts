@@ -38,31 +38,71 @@ export class PropertiesService {
     this.validateSubtypeData(createPropertyDto);
     this.validateBusinessTypeConfig(propertyData.businessType, saleTypes);
 
-    return this.prisma.property.create({
-      data: {
-        ...propertyData,
-        userId,
-        ...(propertyData.businessType === BusinessType.SALE &&
-          saleTypes && {
-            saleTypes: {
-              create: saleTypes.map((type) => ({ type })),
-            },
-          }),
-        ...(house && { house: { create: house } }),
-        ...(apartment && { apartment: { create: apartment } }),
-        ...(land && { land: { create: land } }),
-        ...(smallFarm && { smallfarm: { create: smallFarm } }),
-        ...(countryHouse && { countryhouse: { create: countryHouse } }),
-      },
-      include: {
-        house: true,
-        apartment: true,
-        land: true,
-        smallfarm: true,
-        countryhouse: true,
-        saleTypes: true,
-      },
+    return this.createWithRetry(propertyData, userId, saleTypes, {
+      house,
+      apartment,
+      land,
+      smallFarm,
+      countryHouse,
     });
+  }
+
+  private async createWithRetry(
+    propertyData: Omit<
+      CreatePropertyDto,
+      'house' | 'apartment' | 'land' | 'smallFarm' | 'countryHouse' | 'saleTypes'
+    >,
+    userId: string,
+    saleTypes: SaleType[] | undefined,
+    subtypes: {
+      house?: CreatePropertyDto['house'];
+      apartment?: CreatePropertyDto['apartment'];
+      land?: CreatePropertyDto['land'];
+      smallFarm?: CreatePropertyDto['smallFarm'];
+      countryHouse?: CreatePropertyDto['countryHouse'];
+    },
+    attempt = 0,
+  ): Promise<Property> {
+    const maxAttempts = 5;
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+    try {
+      return await this.prisma.property.create({
+        data: {
+          ...propertyData,
+          code,
+          userId,
+          ...(propertyData.businessType === BusinessType.SALE &&
+            saleTypes && {
+              saleTypes: {
+                create: saleTypes.map((type) => ({ type })),
+              },
+            }),
+          ...(subtypes.house && { house: { create: subtypes.house } }),
+          ...(subtypes.apartment && { apartment: { create: subtypes.apartment } }),
+          ...(subtypes.land && { land: { create: subtypes.land } }),
+          ...(subtypes.smallFarm && { smallfarm: { create: subtypes.smallFarm } }),
+          ...(subtypes.countryHouse && { countryhouse: { create: subtypes.countryHouse } }),
+        },
+        include: {
+          house: true,
+          apartment: true,
+          land: true,
+          smallfarm: true,
+          countryhouse: true,
+          saleTypes: true,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        attempt < maxAttempts
+      ) {
+        return this.createWithRetry(propertyData, userId, saleTypes, subtypes, attempt + 1);
+      }
+      throw error;
+    }
   }
 
   private validateSubtypeData(dto: CreatePropertyDto) {
@@ -197,11 +237,18 @@ export class PropertiesService {
 
   async update(id: string, updatePropertyDto: UpdatePropertyDto) {
     const { saleTypes, ...propertyData } = updatePropertyDto;
+    const hasSaleTypesUpdate = saleTypes !== undefined;
+    const hasBusinessTypeUpdate = propertyData.businessType !== undefined;
 
-    try {
-      const currentProperty = await this.prisma.property.findUnique({
+    // Only fetch current property if we need to validate business rules
+    const needsValidation = hasSaleTypesUpdate || hasBusinessTypeUpdate;
+    let currentProperty: { businessType: BusinessType; saleTypes: { type: SaleType }[] } | null =
+      null;
+
+    if (needsValidation) {
+      currentProperty = await this.prisma.property.findUnique({
         where: { id },
-        include: { saleTypes: true },
+        select: { businessType: true, saleTypes: { select: { type: true } } },
       });
 
       if (!currentProperty) {
@@ -209,34 +256,31 @@ export class PropertiesService {
       }
 
       const newBusinessType = propertyData.businessType ?? currentProperty.businessType;
+      const effectiveSaleTypes = saleTypes ?? currentProperty.saleTypes.map((st) => st.type);
+      this.validateBusinessTypeConfig(newBusinessType, effectiveSaleTypes);
+    }
 
-      if (saleTypes !== undefined || propertyData.businessType !== undefined) {
-        const effectiveSaleTypes = saleTypes ?? currentProperty.saleTypes.map((st) => st.type);
-        this.validateBusinessTypeConfig(newBusinessType, effectiveSaleTypes);
-      }
-
+    try {
       return await this.prisma.$transaction(async (tx) => {
-        const updatedProperty = await tx.property.update({
-          where: { id },
-          data: propertyData,
-        });
-
-        if (saleTypes !== undefined) {
+        if (
+          hasSaleTypesUpdate ||
+          (hasBusinessTypeUpdate && propertyData.businessType === BusinessType.RENT)
+        ) {
           await tx.propertySaleType.deleteMany({ where: { propertyId: id } });
 
-          if (newBusinessType === BusinessType.SALE && saleTypes.length > 0) {
-            await tx.propertySaleType.createMany({
-              data: saleTypes.map((type) => ({ propertyId: id, type })),
-            });
+          if (hasSaleTypesUpdate && saleTypes.length > 0) {
+            const newBusinessType = propertyData.businessType ?? currentProperty?.businessType;
+            if (newBusinessType === BusinessType.SALE) {
+              await tx.propertySaleType.createMany({
+                data: saleTypes.map((type) => ({ propertyId: id, type })),
+              });
+            }
           }
         }
 
-        if (propertyData.businessType === BusinessType.RENT && saleTypes === undefined) {
-          await tx.propertySaleType.deleteMany({ where: { propertyId: id } });
-        }
-
-        return tx.property.findUnique({
+        return tx.property.update({
           where: { id },
+          data: propertyData,
           include: { saleTypes: true },
         });
       });

@@ -109,11 +109,6 @@ export class CreatePropertyDto {
   @MinLength(2, { message: 'Bairro deve ter no mínimo 2 caracteres' })
   neighborhood!: string;
 
-  @ApiProperty({ example: 'PROP001', description: 'Código único da propriedade', minLength: 1 })
-  @IsString({ message: 'Código deve ser uma string' })
-  @MinLength(1, { message: 'Código deve ter no mínimo 1 carácter' })
-  code!: string;
-
   @ApiProperty({
     enum: BusinessType,
     example: BusinessType.SALE,
@@ -130,7 +125,10 @@ export class CreatePropertyDto {
   })
   @IsOptional()
   @IsArray({ message: 'saleTypes deve ser um array' })
-  @IsEnum(SaleType, { each: true, message: 'Tipo de venda inválido. Use DIRECT, FINANCING ou EXCHANGE' })
+  @IsEnum(SaleType, {
+    each: true,
+    message: 'Tipo de venda inválido. Use DIRECT, FINANCING ou EXCHANGE',
+  })
   saleTypes?: SaleType[];
 
   @ApiPropertyOptional({ type: CreateHouseDto, description: 'Dados específicos de casa' })
