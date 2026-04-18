@@ -1,13 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  BusinessType,
-  Prisma,
-  Property,
-  PropertyImage,
-  PropertyRoom,
-  PropertyType,
-  SaleType,
-} from '@prisma/client';
+import { BusinessType, Prisma, Property, PropertyType, SaleType } from '@prisma/client';
 import {
   InvalidBusinessTypeConfigError,
   InvalidSubtypeDataError,
@@ -15,13 +7,17 @@ import {
 } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
-import { CreatePropertyDto, FilterPropertyDto, UpdatePropertyDto } from './dto';
+import {
+  CreatePropertyDto,
+  FilterPropertyDto,
+  PropertyCardDto,
+  PropertyDetailDto,
+  PropertyListResponseDto,
+  UpdatePropertyDto,
+} from './dto';
 import { PropertyImagesService } from './property-images.service';
 
 const PREVIEW_LIMIT_ROOMS = 4;
-
-type RoomWithImages = PropertyRoom & { images: PropertyImage[] };
-type PropertyWithRooms = Property & { rooms: RoomWithImages[] };
 
 @Injectable()
 export class PropertiesService {
@@ -147,28 +143,48 @@ export class PropertiesService {
     }
   }
 
-  async findAll(filters: FilterPropertyDto = {}) {
+  async findAll(filters: FilterPropertyDto = {}): Promise<PropertyListResponseDto> {
     return this.findWithFilters(filters);
   }
 
-  async findWithFilters(filters: FilterPropertyDto) {
-    const { skip = 0, take = 10, ...filterParams } = filters;
+  async findWithFilters(filters: FilterPropertyDto): Promise<PropertyListResponseDto> {
+    const { skip = 0, take = 10, sort = 'newest', ...filterParams } = filters;
 
     const where = this.buildWhereClause(filterParams);
+    const orderBy: Prisma.PropertyOrderByWithRelationInput = {
+      createdAt: sort === 'newest' ? 'desc' : 'asc',
+    };
 
     const [properties, total] = await Promise.all([
       this.prisma.property.findMany({
         skip,
         take,
         where,
-        include: {
+        orderBy,
+        select: {
+          id: true,
+          code: true,
+          type: true,
+          businessType: true,
+          price: true,
+          rentPrice: true,
+          city: true,
+          state: true,
+          neighborhood: true,
+          bedrooms: true,
+          bathrooms: true,
+          parkingSpaces: true,
           rooms: {
             orderBy: { order: 'asc' },
             take: PREVIEW_LIMIT_ROOMS,
-            include: {
+            select: {
               images: {
                 orderBy: { order: 'asc' },
                 take: 1,
+                select: {
+                  id: true,
+                  url: true,
+                },
               },
             },
           },
@@ -177,13 +193,26 @@ export class PropertiesService {
       this.prisma.property.count({ where }),
     ]);
 
-    const data = properties.map((property) => {
-      const { rooms, ...rest } = property;
-      return {
-        ...rest,
-        previewImages: this.extractPreviewImages(property),
-      };
-    });
+    const data: PropertyCardDto[] = properties.map((property) => ({
+      id: property.id,
+      code: property.code,
+      type: property.type,
+      businessType: property.businessType,
+      price: property.price.toString(),
+      rentPrice: property.rentPrice?.toString() ?? null,
+      city: property.city,
+      state: property.state,
+      neighborhood: property.neighborhood,
+      bedrooms: property.bedrooms,
+      bathrooms: property.bathrooms,
+      parkingSpaces: property.parkingSpaces,
+      previewImages: property.rooms
+        .filter((room) => room.images.length > 0)
+        .map((room) => ({
+          id: room.images[0].id,
+          url: room.images[0].url,
+        })),
+    }));
 
     return {
       data,
@@ -193,7 +222,7 @@ export class PropertiesService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string): Promise<PropertyDetailDto> {
     const property = await this.prisma.property.findFirst({
       where: { id, deletedAt: null },
       include: {
@@ -222,16 +251,59 @@ export class PropertiesService {
     }
 
     const whatsappNumber = this.whatsappService.getWhatsappNumber(id);
-
     const unassignedImages = property.images.filter((img) => !img.roomId);
 
     return {
-      ...property,
-      whatsappContact: whatsappNumber,
+      id: property.id,
+      code: property.code,
+      type: property.type,
+      businessType: property.businessType,
+      saleTypes: property.saleTypes.map((st) => ({ id: st.id, type: st.type })),
+      price: property.price.toString(),
+      rentPrice: property.rentPrice?.toString() ?? null,
+      condoFee: property.condoFee?.toString() ?? null,
+      city: property.city,
+      state: property.state,
+      neighborhood: property.neighborhood,
+      description: property.description,
+      totalArea: property.totalArea,
+      builtArea: property.builtArea,
+      bedrooms: property.bedrooms,
+      bathrooms: property.bathrooms,
+      parkingSpaces: property.parkingSpaces,
       gallery: {
-        unassigned: unassignedImages,
-        rooms: property.rooms,
+        unassigned: unassignedImages.map((img) => ({
+          id: img.id,
+          url: img.url,
+          label: img.label,
+          order: img.order,
+          roomId: img.roomId,
+          createdAt: img.createdAt,
+        })),
+        rooms: property.rooms.map((room) => ({
+          id: room.id,
+          name: room.name,
+          order: room.order,
+          createdAt: room.createdAt,
+          images: room.images.map((img) => ({
+            id: img.id,
+            url: img.url,
+            label: img.label,
+            order: img.order,
+            roomId: img.roomId,
+            createdAt: img.createdAt,
+          })),
+        })),
       },
+      house: property.house ?? undefined,
+      apartment: property.apartment ?? undefined,
+      land: property.land ?? undefined,
+      smallfarm: property.smallfarm ?? undefined,
+      countryhouse: property.countryhouse ?? undefined,
+      whatsappContact: whatsappNumber,
+      userId: property.userId,
+      createdAt: property.createdAt,
+      updatedAt: property.updatedAt,
     };
   }
 
@@ -363,9 +435,5 @@ export class PropertiesService {
     }
 
     return where;
-  }
-
-  private extractPreviewImages(property: PropertyWithRooms): PropertyImage[] {
-    return property.rooms.filter((room) => room.images.length > 0).map((room) => room.images[0]);
   }
 }
