@@ -1,6 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, Property, PropertyImage, PropertyRoom, PropertyType } from '@prisma/client';
-import { InvalidSubtypeDataError, PropertyNotFoundError } from '../common/errors';
+import {
+  BusinessType,
+  Prisma,
+  Property,
+  PropertyImage,
+  PropertyRoom,
+  PropertyType,
+  SaleType,
+} from '@prisma/client';
+import {
+  InvalidBusinessTypeConfigError,
+  InvalidSubtypeDataError,
+  PropertyNotFoundError,
+} from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { CreatePropertyDto, FilterPropertyDto, UpdatePropertyDto } from './dto';
@@ -20,14 +32,22 @@ export class PropertiesService {
   ) {}
 
   async create(createPropertyDto: CreatePropertyDto, userId: string) {
-    const { house, apartment, land, smallFarm, countryHouse, ...propertyData } = createPropertyDto;
+    const { house, apartment, land, smallFarm, countryHouse, saleTypes, ...propertyData } =
+      createPropertyDto;
 
     this.validateSubtypeData(createPropertyDto);
+    this.validateBusinessTypeConfig(propertyData.businessType, saleTypes);
 
     return this.prisma.property.create({
       data: {
         ...propertyData,
         userId,
+        ...(propertyData.businessType === BusinessType.SALE &&
+          saleTypes && {
+            saleTypes: {
+              create: saleTypes.map((type) => ({ type })),
+            },
+          }),
         ...(house && { house: { create: house } }),
         ...(apartment && { apartment: { create: apartment } }),
         ...(land && { land: { create: land } }),
@@ -40,6 +60,7 @@ export class PropertiesService {
         land: true,
         smallfarm: true,
         countryhouse: true,
+        saleTypes: true,
       },
     });
   }
@@ -69,6 +90,20 @@ export class PropertiesService {
           `O campo "${field}" não deve ser enviado para o tipo ${dto.type}`,
         );
       }
+    }
+  }
+
+  private validateBusinessTypeConfig(businessType: BusinessType, saleTypes?: SaleType[]) {
+    if (businessType === BusinessType.RENT && saleTypes && saleTypes.length > 0) {
+      throw new InvalidBusinessTypeConfigError(
+        'Propriedades de aluguel não podem ter tipos de venda',
+      );
+    }
+
+    if (businessType === BusinessType.SALE && (!saleTypes || saleTypes.length === 0)) {
+      throw new InvalidBusinessTypeConfigError(
+        'Propriedades de venda devem ter pelo menos um tipo de venda',
+      );
     }
   }
 
@@ -119,8 +154,8 @@ export class PropertiesService {
   }
 
   async findOne(id: string) {
-    const property = await this.prisma.property.findUnique({
-      where: { id },
+    const property = await this.prisma.property.findFirst({
+      where: { id, deletedAt: null },
       include: {
         images: {
           orderBy: { order: 'asc' },
@@ -133,6 +168,7 @@ export class PropertiesService {
             },
           },
         },
+        saleTypes: true,
         house: true,
         apartment: true,
         land: true,
@@ -160,10 +196,49 @@ export class PropertiesService {
   }
 
   async update(id: string, updatePropertyDto: UpdatePropertyDto) {
+    const { saleTypes, ...propertyData } = updatePropertyDto;
+
     try {
-      return await this.prisma.property.update({
+      const currentProperty = await this.prisma.property.findUnique({
         where: { id },
-        data: updatePropertyDto,
+        include: { saleTypes: true },
+      });
+
+      if (!currentProperty) {
+        throw new PropertyNotFoundError(id);
+      }
+
+      const newBusinessType = propertyData.businessType ?? currentProperty.businessType;
+
+      if (saleTypes !== undefined || propertyData.businessType !== undefined) {
+        const effectiveSaleTypes = saleTypes ?? currentProperty.saleTypes.map((st) => st.type);
+        this.validateBusinessTypeConfig(newBusinessType, effectiveSaleTypes);
+      }
+
+      return await this.prisma.$transaction(async (tx) => {
+        const updatedProperty = await tx.property.update({
+          where: { id },
+          data: propertyData,
+        });
+
+        if (saleTypes !== undefined) {
+          await tx.propertySaleType.deleteMany({ where: { propertyId: id } });
+
+          if (newBusinessType === BusinessType.SALE && saleTypes.length > 0) {
+            await tx.propertySaleType.createMany({
+              data: saleTypes.map((type) => ({ propertyId: id, type })),
+            });
+          }
+        }
+
+        if (propertyData.businessType === BusinessType.RENT && saleTypes === undefined) {
+          await tx.propertySaleType.deleteMany({ where: { propertyId: id } });
+        }
+
+        return tx.property.findUnique({
+          where: { id },
+          include: { saleTypes: true },
+        });
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
@@ -239,12 +314,18 @@ export class PropertiesService {
       where.businessType = filters.businessType;
     }
 
+    if (filters.saleTypes && filters.saleTypes.length > 0) {
+      where.saleTypes = {
+        some: {
+          type: { in: filters.saleTypes },
+        },
+      };
+    }
+
     return where;
   }
 
   private extractPreviewImages(property: PropertyWithRooms): PropertyImage[] {
-    return property.rooms
-      .filter((room) => room.images.length > 0)
-      .map((room) => room.images[0]);
+    return property.rooms.filter((room) => room.images.length > 0).map((room) => room.images[0]);
   }
 }

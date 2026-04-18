@@ -1,11 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BusinessCode, PropertyType } from '@prisma/client';
+import { BusinessType, PropertyType, SaleType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsEnum,
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Min,
   MinLength,
   ValidateNested,
@@ -31,29 +33,31 @@ export class CreatePropertyDto {
   @IsEnum(PropertyType, { message: 'Tipo de propriedade inválido' })
   type!: PropertyType;
 
-  @ApiProperty({ example: 750000, description: 'Preço de venda do imóvel', minimum: 0 })
-  @IsNumber({}, { message: 'Preço deve ser um número' })
-  @Min(0, { message: 'Preço não pode ser negativo' })
-  @Type(() => Number)
-  price!: number;
+  @ApiProperty({ example: '750000.00', description: 'Preço de venda do imóvel' })
+  @IsString({ message: 'Preço deve ser uma string' })
+  @Matches(/^\d+(\.\d{1,2})?$/, {
+    message: 'Preço deve ser um número decimal válido (ex: 750000.00)',
+  })
+  price!: string;
 
   @ApiPropertyOptional({
-    example: 3500,
+    example: '3500.00',
     description: 'Preço de aluguel (quando aplicável)',
-    minimum: 0,
   })
   @IsOptional()
-  @IsNumber({}, { message: 'Preço de aluguel deve ser um número' })
-  @Min(0, { message: 'Preço de aluguel não pode ser negativo' })
-  @Type(() => Number)
-  rentPrice?: number;
+  @IsString({ message: 'Preço de aluguel deve ser uma string' })
+  @Matches(/^\d+(\.\d{1,2})?$/, {
+    message: 'Preço de aluguel deve ser um número decimal válido (ex: 3500.00)',
+  })
+  rentPrice?: string;
 
-  @ApiPropertyOptional({ example: 700, description: 'Taxa de condomínio', minimum: 0 })
+  @ApiPropertyOptional({ example: '700.00', description: 'Taxa de condomínio' })
   @IsOptional()
-  @IsNumber({}, { message: 'Taxa de condomínio deve ser um número' })
-  @Min(0, { message: 'Taxa de condomínio não pode ser negativa' })
-  @Type(() => Number)
-  condoFee?: number;
+  @IsString({ message: 'Taxa de condomínio deve ser uma string' })
+  @Matches(/^\d+(\.\d{1,2})?$/, {
+    message: 'Taxa de condomínio deve ser um número decimal válido (ex: 700.00)',
+  })
+  condoFee?: string;
 
   @ApiPropertyOptional({ example: 250, description: 'Área total em m²', minimum: 0 })
   @IsOptional()
@@ -111,12 +115,23 @@ export class CreatePropertyDto {
   code!: string;
 
   @ApiProperty({
-    enum: BusinessCode,
-    example: BusinessCode.SALE_DIRECT,
-    description: 'Tipo de negócio da propriedade',
+    enum: BusinessType,
+    example: BusinessType.SALE,
+    description: 'Tipo de negócio (RENT ou SALE)',
   })
-  @IsEnum(BusinessCode, { message: 'Tipo de negócio inválido' })
-  businessType!: BusinessCode;
+  @IsEnum(BusinessType, { message: 'Tipo de negócio inválido. Use RENT ou SALE' })
+  businessType!: BusinessType;
+
+  @ApiPropertyOptional({
+    enum: SaleType,
+    isArray: true,
+    example: [SaleType.DIRECT, SaleType.FINANCING],
+    description: 'Tipos de venda (obrigatório se SALE, vazio se RENT)',
+  })
+  @IsOptional()
+  @IsArray({ message: 'saleTypes deve ser um array' })
+  @IsEnum(SaleType, { each: true, message: 'Tipo de venda inválido. Use DIRECT, FINANCING ou EXCHANGE' })
+  saleTypes?: SaleType[];
 
   @ApiPropertyOptional({ type: CreateHouseDto, description: 'Dados específicos de casa' })
   @IsOptional()

@@ -48,3 +48,11 @@ export class InvalidSubtypeDataError extends DomainError {
     super(message);
   }
 }
+
+export class InvalidBusinessTypeConfigError extends DomainError {
+  readonly statusCode = HttpStatus.BAD_REQUEST;
+
+  constructor(message: string) {
+    super(message);
+  }
+}

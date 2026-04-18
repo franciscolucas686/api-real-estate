@@ -21,15 +21,16 @@ model User {
 
 
 model Property {
-  id            String          @id @default(uuid())
-  code          String          @unique
-  businessType  BusinessCode
+  id            String             @id @default(uuid())
+  code          String             @unique
+  businessType  BusinessType
   type          PropertyType
   price         Decimal
   rentPrice     Decimal?
   condoFee      Decimal?
   images        PropertyImage[]
   rooms         PropertyRoom[]
+  saleTypes     PropertySaleType[]
   totalArea     Float?
   builtArea     Float?
   bedrooms      Int?
@@ -39,9 +40,8 @@ model Property {
   city          String
   neighborhood  String
   description   String
-  coverImage    String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
   deletedAt     DateTime?
   userId        String
   apartment     Apartment?
@@ -49,7 +49,7 @@ model Property {
   house         House?
   land          Land?
   smallfarm     SmallFarm?
-  user          User            @relation(fields: [userId], references: [id])
+  user          User               @relation(fields: [userId], references: [id])
 
   @@index([type])
   @@index([city, neighborhood])
@@ -82,6 +82,17 @@ model PropertyImage {
   @@index([propertyId])
   @@index([roomId])
   @@index([propertyId, order])
+}
+
+model PropertySaleType {
+  id         String   @id @default(uuid())
+  propertyId String
+  type       SaleType
+  createdAt  DateTime @default(now())
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, type])
+  @@index([propertyId])
 }
 
 model House {
@@ -132,10 +143,14 @@ model CountryHouse {
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 }
 
-enum BusinessCode {
+enum BusinessType {
   RENT
-  SALE_DIRECT
-  SALE_FINANCING
+  SALE
+}
+
+enum SaleType {
+  DIRECT
+  FINANCING
   EXCHANGE
 }
 
