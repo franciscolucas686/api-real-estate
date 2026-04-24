@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import {
+  CreateApartmentDto,
   CreatePropertyDto,
   FilterPropertyDto,
   PropertyCardDto,
