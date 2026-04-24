@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import {
+  CreateApartmentDto,
   CreatePropertyDto,
   FilterPropertyDto,
   PropertyCardDto,
@@ -35,9 +36,11 @@ export class PropertiesService {
     this.validateBusinessTypeConfig(propertyData.businessType, saleTypes);
     this.validateSuites(propertyData.suites, propertyData.bathrooms);
 
+    const normalizedApartment = apartment ? this.normalizeApartmentFloor(apartment) : apartment;
+
     return this.createWithRetry(propertyData, userId, saleTypes, {
       house,
-      apartment,
+      apartment: normalizedApartment,
       land,
       smallFarm,
       countryHouse,
@@ -53,7 +56,7 @@ export class PropertiesService {
     saleTypes: SaleType[] | undefined,
     subtypes: {
       house?: CreatePropertyDto['house'];
-      apartment?: CreatePropertyDto['apartment'];
+      apartment?: CreateApartmentDto & { floor: number };
       land?: CreatePropertyDto['land'];
       smallFarm?: CreatePropertyDto['smallFarm'];
       countryHouse?: CreatePropertyDto['countryHouse'];
@@ -150,6 +153,24 @@ export class PropertiesService {
         `Suítes (${suites}) não pode ser maior que o número de banheiros (${bathrooms})`,
       );
     }
+  }
+
+  private normalizeApartmentFloor(
+    apartment: CreatePropertyDto['apartment'],
+  ): (CreateApartmentDto & { floor: number }) | undefined {
+    if (!apartment) return apartment;
+
+    if (apartment.isGroundFloor === true) {
+      return { ...apartment, floor: 0 };
+    }
+
+    if (apartment.floor == null) {
+      throw new InvalidSubtypeDataError(
+        'O campo "floor" é obrigatório quando isGroundFloor não é true',
+      );
+    }
+
+    return apartment as CreateApartmentDto & { floor: number };
   }
 
   async findAll(filters: FilterPropertyDto = {}): Promise<PropertyListResponseDto> {
