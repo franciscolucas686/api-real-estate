@@ -87,6 +87,17 @@ export class CreatePropertyDto {
   @Type(() => Number)
   bathrooms?: number;
 
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Quantidade de suítes (não pode ser maior que o número de banheiros)',
+    minimum: 0,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: 'Suítes deve ser um número' })
+  @Min(0, { message: 'Suítes não pode ser negativo' })
+  @Type(() => Number)
+  suites?: number;
+
   @ApiPropertyOptional({ example: 2, description: 'Quantidade de vagas de garagem', minimum: 0 })
   @IsOptional()
   @IsNumber({}, { message: 'Vagas de garagem deve ser um número' })

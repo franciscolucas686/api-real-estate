@@ -104,6 +104,9 @@ export class PropertyDetailDto {
   bathrooms!: number | null;
 
   @ApiProperty({ nullable: true })
+  suites!: number | null;
+
+  @ApiProperty({ nullable: true })
   parkingSpaces!: number | null;
 
   @ApiProperty({ type: GalleryDto })

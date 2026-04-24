@@ -33,6 +33,7 @@ export class PropertiesService {
 
     this.validateSubtypeData(createPropertyDto);
     this.validateBusinessTypeConfig(propertyData.businessType, saleTypes);
+    this.validateSuites(propertyData.suites, propertyData.bathrooms);
 
     return this.createWithRetry(propertyData, userId, saleTypes, {
       house,
@@ -143,6 +144,14 @@ export class PropertiesService {
     }
   }
 
+  private validateSuites(suites: number | undefined | null, bathrooms: number | undefined | null) {
+    if (suites != null && bathrooms != null && suites > bathrooms) {
+      throw new InvalidSubtypeDataError(
+        `Suítes (${suites}) não pode ser maior que o número de banheiros (${bathrooms})`,
+      );
+    }
+  }
+
   async findAll(filters: FilterPropertyDto = {}): Promise<PropertyListResponseDto> {
     return this.findWithFilters(filters);
   }
@@ -172,6 +181,7 @@ export class PropertiesService {
           state: true,
           neighborhood: true,
           bedrooms: true,
+          suites: true,
           bathrooms: true,
           parkingSpaces: true,
           rooms: {
@@ -270,6 +280,7 @@ export class PropertiesService {
       builtArea: property.builtArea,
       bedrooms: property.bedrooms,
       bathrooms: property.bathrooms,
+      suites: property.suites,
       parkingSpaces: property.parkingSpaces,
       gallery: {
         unassigned: unassignedImages.map((img) => ({
@@ -311,16 +322,28 @@ export class PropertiesService {
     const { saleTypes, ...propertyData } = updatePropertyDto;
     const hasSaleTypesUpdate = saleTypes !== undefined;
     const hasBusinessTypeUpdate = propertyData.businessType !== undefined;
+    const hasSuitesOrBathroomsUpdate =
+      propertyData.suites !== undefined || propertyData.bathrooms !== undefined;
 
     // Only fetch current property if we need to validate business rules
-    const needsValidation = hasSaleTypesUpdate || hasBusinessTypeUpdate;
-    let currentProperty: { businessType: BusinessType; saleTypes: { type: SaleType }[] } | null =
-      null;
+    const needsValidation =
+      hasSaleTypesUpdate || hasBusinessTypeUpdate || hasSuitesOrBathroomsUpdate;
+    let currentProperty: {
+      businessType: BusinessType;
+      saleTypes: { type: SaleType }[];
+      suites: number | null;
+      bathrooms: number | null;
+    } | null = null;
 
     if (needsValidation) {
       currentProperty = await this.prisma.property.findUnique({
         where: { id },
-        select: { businessType: true, saleTypes: { select: { type: true } } },
+        select: {
+          businessType: true,
+          saleTypes: { select: { type: true } },
+          suites: true,
+          bathrooms: true,
+        },
       });
 
       if (!currentProperty) {
@@ -330,6 +353,12 @@ export class PropertiesService {
       const newBusinessType = propertyData.businessType ?? currentProperty.businessType;
       const effectiveSaleTypes = saleTypes ?? currentProperty.saleTypes.map((st) => st.type);
       this.validateBusinessTypeConfig(newBusinessType, effectiveSaleTypes);
+
+      if (hasSuitesOrBathroomsUpdate) {
+        const effectiveSuites = propertyData.suites ?? currentProperty.suites;
+        const effectiveBathrooms = propertyData.bathrooms ?? currentProperty.bathrooms;
+        this.validateSuites(effectiveSuites, effectiveBathrooms);
+      }
     }
 
     try {

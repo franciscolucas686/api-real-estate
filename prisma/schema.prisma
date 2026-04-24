@@ -35,6 +35,7 @@ model Property {
   builtArea     Float?
   bedrooms      Int?
   bathrooms     Int?
+  suites        Int?
   parkingSpaces Int?
   state         String
   city          String
