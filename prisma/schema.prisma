@@ -107,14 +107,15 @@ model House {
 }
 
 model Apartment {
-  id          String      @id @default(uuid())
-  propertyId  String      @unique
-  floor       Int
-  hasElevator Boolean
-  hasBalcony  Boolean
-  sunPosition SunPosition
-  hasPool     Boolean?
-  property    Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id           String      @id @default(uuid())
+  propertyId   String      @unique
+  floor        Int
+  isGroundFloor Boolean?
+  hasElevator  Boolean
+  hasBalcony   Boolean
+  sunPosition  SunPosition
+  hasPool      Boolean?
+  property     Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 }
 
 model Land {
