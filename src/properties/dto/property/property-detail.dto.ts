@@ -13,12 +13,6 @@ export class PropertyImageDto {
 
   @ApiProperty()
   order!: number;
-
-  @ApiProperty({ nullable: true })
-  roomId!: string | null;
-
-  @ApiProperty()
-  createdAt!: Date;
 }
 
 export class PropertyRoomDto {
@@ -33,9 +27,6 @@ export class PropertyRoomDto {
 
   @ApiProperty({ type: [PropertyImageDto] })
   images!: PropertyImageDto[];
-
-  @ApiProperty()
-  createdAt!: Date;
 }
 
 export class PropertySaleTypeDto {
@@ -47,8 +38,8 @@ export class PropertySaleTypeDto {
 }
 
 export class GalleryDto {
-  @ApiProperty({ type: [PropertyImageDto] })
-  unassigned!: PropertyImageDto[];
+  @ApiPropertyOptional({ type: [PropertyImageDto] })
+  unassigned?: PropertyImageDto[];
 
   @ApiProperty({ type: [PropertyRoomDto] })
   rooms!: PropertyRoomDto[];
@@ -113,19 +104,7 @@ export class PropertyDetailDto {
   gallery!: GalleryDto;
 
   @ApiPropertyOptional()
-  house?: Record<string, unknown>;
-
-  @ApiPropertyOptional()
-  apartment?: Record<string, unknown>;
-
-  @ApiPropertyOptional()
-  land?: Record<string, unknown>;
-
-  @ApiPropertyOptional()
-  smallfarm?: Record<string, unknown>;
-
-  @ApiPropertyOptional()
-  countryhouse?: Record<string, unknown>;
+  details?: Record<string, unknown>;
 
   @ApiProperty({ nullable: true })
   whatsappContact!: string | null;

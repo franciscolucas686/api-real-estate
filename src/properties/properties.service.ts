@@ -283,6 +283,23 @@ export class PropertiesService {
 
     const whatsappNumber = this.whatsappService.getWhatsappNumber(id);
     const unassignedImages = property.images.filter((img) => !img.roomId);
+    const unassignedMapped = unassignedImages.map((img) => ({
+      id: img.id,
+      url: img.url,
+      label: img.label,
+      order: img.order,
+    }));
+
+    const subtype =
+      property.house ??
+      property.apartment ??
+      property.land ??
+      property.smallfarm ??
+      property.countryhouse ??
+      null;
+    const details = subtype
+      ? (({ id: _id, propertyId: _pid, ...rest }) => rest)(subtype)
+      : undefined;
 
     return {
       id: property.id,
@@ -304,34 +321,20 @@ export class PropertiesService {
       suites: property.suites,
       parkingSpaces: property.parkingSpaces,
       gallery: {
-        unassigned: unassignedImages.map((img) => ({
-          id: img.id,
-          url: img.url,
-          label: img.label,
-          order: img.order,
-          roomId: img.roomId,
-          createdAt: img.createdAt,
-        })),
+        ...(unassignedMapped.length > 0 && { unassigned: unassignedMapped }),
         rooms: property.rooms.map((room) => ({
           id: room.id,
           name: room.name,
           order: room.order,
-          createdAt: room.createdAt,
           images: room.images.map((img) => ({
             id: img.id,
             url: img.url,
             label: img.label,
             order: img.order,
-            roomId: img.roomId,
-            createdAt: img.createdAt,
           })),
         })),
       },
-      house: property.house ?? undefined,
-      apartment: property.apartment ?? undefined,
-      land: property.land ?? undefined,
-      smallfarm: property.smallfarm ?? undefined,
-      countryhouse: property.countryhouse ?? undefined,
+      details,
       whatsappContact: whatsappNumber,
       userId: property.userId,
       createdAt: property.createdAt,
