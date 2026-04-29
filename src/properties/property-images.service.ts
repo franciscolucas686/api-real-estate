@@ -9,7 +9,11 @@ import {
 } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../r2/r2.service';
-import { ReorderPropertyImagesDto, UpdatePropertyImageDto } from './dto';
+import {
+  BulkDeletePropertyImagesDto,
+  ReorderPropertyImagesDto,
+  UpdatePropertyImageDto,
+} from './dto';
 
 @Injectable()
 export class PropertyImagesService {
@@ -135,6 +139,31 @@ export class PropertyImagesService {
     return this.prisma.propertyImage.delete({
       where: { id: imageId },
     });
+  }
+
+  async bulkDeleteImages(propertyId: string, dto: BulkDeletePropertyImagesDto): Promise<void> {
+    const images = await this.prisma.propertyImage.findMany({
+      where: { id: { in: dto.imageIds }, propertyId },
+    });
+
+    if (images.length !== dto.imageIds.length) {
+      throw new ImageNotBelongToPropertyError('uma ou mais imagens', propertyId);
+    }
+
+    const keys = images.map((img) => this.r2.getObjectKeyFromUrl(img.url));
+
+    await this.r2.deleteImages(keys);
+
+    try {
+      await this.prisma.propertyImage.deleteMany({
+        where: { id: { in: dto.imageIds } },
+      });
+    } catch (error) {
+      this.logger.error(
+        `R2 deletado mas falha ao remover registros do banco para propertyId=${propertyId}:`,
+        error,
+      );
+    }
   }
 
   async deleteImagesFromR2(images: PropertyImage[]) {

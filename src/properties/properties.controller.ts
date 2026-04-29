@@ -29,6 +29,7 @@ import { CurrentUserDto } from '../auth/dto/current-user.dto';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 import { CacheKey, CacheTTL, InvalidateCache } from '../common/decorators/cache.decorator';
 import {
+  BulkDeletePropertyImagesDto,
   CreatePropertyDto,
   CreatePropertyRoomDto,
   FilterPropertyDto,
@@ -175,6 +176,24 @@ export class PropertiesController {
   }
 
   @Throttle({ default: { ttl: 3600, limit: 30 } })
+  @Delete(':propertyId/images')
+  @HttpCode(204)
+  @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
+  @ApiOperation({ summary: 'Deletar múltiplas imagens de uma propriedade' })
+  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
+  @ApiBody({ type: BulkDeletePropertyImagesDto })
+  @ApiResponse({ status: 204, description: 'Imagens deletadas' })
+  @ApiResponse({ status: 400, description: 'Uma ou mais imagens não pertencem à propriedade' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async bulkDeleteImages(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Body() dto: BulkDeletePropertyImagesDto,
+    @CurrentUser() user: CurrentUserDto,
+  ) {
+    await this.propertyImagesService.bulkDeleteImages(propertyId, dto);
+  }
+
   @Delete(':propertyId/images/:imageId')
   @HttpCode(204)
   @UseGuards(JwtGuard)
