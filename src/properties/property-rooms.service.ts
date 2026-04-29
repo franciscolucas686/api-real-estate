@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { PropertyRoom } from '@prisma/client';
+import { ConflictException, Injectable } from '@nestjs/common';
+import { Prisma, PropertyRoom } from '@prisma/client';
 import {
   ImageNotBelongToPropertyError,
   PropertyNotFoundError,
@@ -23,13 +23,20 @@ export class PropertyRoomsService {
 
     const order = dto.order ?? (await this.getNextRoomOrder(propertyId));
 
-    return this.prisma.propertyRoom.create({
-      data: {
-        propertyId,
-        name: dto.name,
-        order,
-      },
-    });
+    try {
+      return await this.prisma.propertyRoom.create({
+        data: {
+          propertyId,
+          name: dto.name,
+          order,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException(`Já existe um cômodo com o nome "${dto.name}" neste imóvel`);
+      }
+      throw error;
+    }
   }
 
   async updateRoom(

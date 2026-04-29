@@ -65,6 +65,7 @@ model PropertyRoom {
   property   Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   images     PropertyImage[]
 
+  @@unique([propertyId, name])
   @@index([propertyId])
   @@index([propertyId, order])
 }
