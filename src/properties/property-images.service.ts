@@ -79,11 +79,32 @@ export class PropertyImagesService {
       throw new ImageNotBelongToPropertyError('uma ou mais imagens', propertyId);
     }
 
+    const roomIds = [
+      ...new Set(
+        dto.items
+          .map((item) => item.roomId)
+          .filter((id): id is string => typeof id === 'string'),
+      ),
+    ];
+
+    if (roomIds.length > 0) {
+      const rooms = await this.prisma.propertyRoom.findMany({
+        where: { id: { in: roomIds }, propertyId },
+      });
+
+      if (rooms.length !== roomIds.length) {
+        throw new ImageNotBelongToPropertyError('um ou mais comodos', propertyId);
+      }
+    }
+
     await this.prisma.$transaction(
       dto.items.map((item) =>
         this.prisma.propertyImage.update({
           where: { id: item.imageId },
-          data: { order: item.order },
+          data: {
+            order: item.order,
+            ...(item.roomId !== undefined && { roomId: item.roomId }),
+          },
         }),
       ),
     );
