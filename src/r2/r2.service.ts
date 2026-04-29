@@ -66,6 +66,21 @@ export class R2Service {
     );
   }
 
+  async deleteImages(keys: string[]): Promise<void> {
+    if (keys.length === 0) return;
+
+    const { client, bucketName } = this.getConfigured();
+
+    const objects = keys.map((key) => ({ Key: key }));
+
+    await client.send(
+      new DeleteObjectsCommand({
+        Bucket: bucketName,
+        Delete: { Objects: objects },
+      }),
+    );
+  }
+
   getObjectKeyFromUrl(imageUrl: string): string {
     const { bucketName } = this.getConfigured();
 
