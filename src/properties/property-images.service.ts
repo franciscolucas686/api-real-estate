@@ -81,9 +81,7 @@ export class PropertyImagesService {
 
     const roomIds = [
       ...new Set(
-        dto.items
-          .map((item) => item.roomId)
-          .filter((id): id is string => typeof id === 'string'),
+        dto.items.map((item) => item.roomId).filter((id): id is string => typeof id === 'string'),
       ),
     ];
 
