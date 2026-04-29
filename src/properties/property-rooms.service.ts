@@ -8,7 +8,6 @@ import {
 } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  AssignPropertyImagesToRoomDto,
   CreatePropertyRoomDto,
   ReorderPropertyRoomsDto,
   UpdatePropertyRoomDto,
@@ -87,7 +86,10 @@ export class PropertyRoomsService {
     });
   }
 
-  async assignImagesToRoom(propertyId: string, dto: AssignPropertyImagesToRoomDto): Promise<void> {
+  async assignImagesToRoom(
+    propertyId: string,
+    dto: { imageIds: string[]; roomId?: string | null },
+  ): Promise<void> {
     await this.ensurePropertyExists(propertyId);
 
     if (dto.roomId) {

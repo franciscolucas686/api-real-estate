@@ -29,7 +29,6 @@ import { CurrentUserDto } from '../auth/dto/current-user.dto';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 import { CacheKey, CacheTTL, InvalidateCache } from '../common/decorators/cache.decorator';
 import {
-  AssignPropertyImagesToRoomDto,
   CreatePropertyDto,
   CreatePropertyRoomDto,
   FilterPropertyDto,
@@ -291,23 +290,6 @@ export class PropertiesController {
     @CurrentUser() user: CurrentUserDto,
   ) {
     return this.propertyImagesService.reorderImages(propertyId, dto);
-  }
-
-  @Post(':propertyId/images/assign-room')
-  @UseGuards(JwtGuard)
-  @InvalidateCache('/properties')
-  @ApiOperation({ summary: 'Associar multiplas imagens a um comodo' })
-  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
-  @ApiBody({ type: AssignPropertyImagesToRoomDto })
-  @ApiResponse({ status: 200, description: 'Imagens associadas ao comodo' })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async assignImagesToRoom(
-    @Param('propertyId', ParseUUIDPipe) propertyId: string,
-    @Body() dto: AssignPropertyImagesToRoomDto,
-    @CurrentUser() user: CurrentUserDto,
-  ) {
-    await this.propertyRoomsService.assignImagesToRoom(propertyId, dto);
-    return { success: true };
   }
 
   @Patch(':propertyId/images/:imageId')
