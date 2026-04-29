@@ -181,6 +181,7 @@ export class PropertiesController {
   @UseGuards(JwtGuard)
   @InvalidateCache('/properties')
   @ApiOperation({ summary: 'Deletar múltiplas imagens de uma propriedade' })
+  @ApiConsumes('application/json')
   @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
   @ApiBody({ type: BulkDeletePropertyImagesDto })
   @ApiResponse({ status: 204, description: 'Imagens deletadas' })
