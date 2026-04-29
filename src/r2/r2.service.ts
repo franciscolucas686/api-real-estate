@@ -1,4 +1,10 @@
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  DeleteObjectsCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { Injectable } from '@nestjs/common';
 import { StorageNotConfiguredError } from '../common/errors';
 import { ConfigService } from '../config/config.service';
@@ -42,6 +48,7 @@ export class R2Service {
         Key: key,
         Body: buffer,
         ContentType: contentType,
+        CacheControl: 'public, max-age=31536000, immutable',
       }),
     );
 
@@ -74,6 +81,35 @@ export class R2Service {
     } catch {
       return imageUrl;
     }
+  }
+
+  async deleteObjectsByPrefix(prefix: string): Promise<void> {
+    const { client, bucketName } = this.getConfigured();
+
+    let continuationToken: string | undefined;
+
+    do {
+      const list = await client.send(
+        new ListObjectsV2Command({
+          Bucket: bucketName,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }),
+      );
+
+      const objects = list.Contents?.map((obj) => ({ Key: obj.Key! })) ?? [];
+
+      if (objects.length > 0) {
+        await client.send(
+          new DeleteObjectsCommand({
+            Bucket: bucketName,
+            Delete: { Objects: objects },
+          }),
+        );
+      }
+
+      continuationToken = list.IsTruncated ? list.NextContinuationToken : undefined;
+    } while (continuationToken);
   }
 
   private normalizeBaseUrl(url: string): string {

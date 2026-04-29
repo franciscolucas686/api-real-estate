@@ -420,14 +420,13 @@ export class PropertiesService {
   async remove(id: string, userId: string) {
     const property = await this.prisma.property.findUnique({
       where: { id },
-      include: { images: true },
     });
 
     if (!property) {
       throw new PropertyNotFoundError(id);
     }
 
-    await this.propertyImagesService.deleteImagesFromR2(property.images);
+    await this.propertyImagesService.deletePropertyImagesFromR2(id);
 
     return this.prisma.property.update({
       where: { id },

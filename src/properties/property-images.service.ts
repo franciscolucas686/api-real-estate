@@ -123,6 +123,14 @@ export class PropertyImagesService {
     await Promise.allSettled(deletePromises);
   }
 
+  async deletePropertyImagesFromR2(propertyId: string): Promise<void> {
+    try {
+      await this.r2.deleteObjectsByPrefix(`real-estate-properties/${propertyId}/`);
+    } catch (error) {
+      this.logger.warn(`Erro ao deletar imagens do imóvel ${propertyId} do R2:`, error);
+    }
+  }
+
   private async processAndUploadImage(
     propertyId: string,
     file: Express.Multer.File,
@@ -136,7 +144,7 @@ export class PropertyImagesService {
       .jpeg({ quality: 80 })
       .toBuffer();
 
-    const key = `real-estate-properties/${propertyId}-${Date.now()}-${randomUUID()}.jpg`;
+    const key = `real-estate-properties/${propertyId}/${Date.now()}-${randomUUID()}.jpg`;
     const url = await this.r2.uploadImage(compressedBuffer, key, 'image/jpeg');
 
     return this.prisma.propertyImage.create({
