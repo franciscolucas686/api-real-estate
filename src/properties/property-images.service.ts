@@ -27,6 +27,7 @@ export class PropertyImagesService {
   async uploadImages(
     propertyId: string,
     files: Express.Multer.File[],
+    roomId?: string,
   ): Promise<{
     images: PropertyImage[];
     total: number;
@@ -38,7 +39,9 @@ export class PropertyImagesService {
     const startOrder = (lastImage?.order ?? -1) + 1;
 
     const uploadedImages = await Promise.all(
-      files.map((file, index) => this.processAndUploadImage(propertyId, file, startOrder + index)),
+      files.map((file, index) =>
+        this.processAndUploadImage(propertyId, file, startOrder + index, roomId),
+      ),
     );
 
     return {
@@ -183,6 +186,7 @@ export class PropertyImagesService {
     propertyId: string,
     file: Express.Multer.File,
     order: number,
+    roomId?: string,
   ): Promise<PropertyImage> {
     const compressedBuffer = await sharp(file.buffer)
       .resize(1920, 1080, {
@@ -196,7 +200,7 @@ export class PropertyImagesService {
     const url = await this.r2.uploadImage(compressedBuffer, key, 'image/jpeg');
 
     return this.prisma.propertyImage.create({
-      data: { propertyId, url, order },
+      data: { propertyId, url, order, ...(roomId && { roomId }) },
     });
   }
 
