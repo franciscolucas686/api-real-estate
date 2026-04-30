@@ -4,7 +4,14 @@ import { IsArray, IsEnum, IsOptional } from 'class-validator';
 import { CreatePropertyDto } from './create-property.dto';
 
 export class UpdatePropertyDto extends PartialType(
-  OmitType(CreatePropertyDto, ['house', 'apartment', 'land', 'smallFarm', 'countryHouse', 'saleTypes'] as const),
+  OmitType(CreatePropertyDto, [
+    'house',
+    'apartment',
+    'land',
+    'smallFarm',
+    'countryHouse',
+    'saleTypes',
+  ] as const),
 ) {
   @ApiPropertyOptional({
     enum: SaleType,
