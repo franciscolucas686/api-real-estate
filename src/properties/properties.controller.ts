@@ -139,8 +139,8 @@ export class PropertiesController {
   @UseGuards(JwtGuard)
   @InvalidateCache('/properties')
   @UseInterceptors(
-    FilesInterceptor('images', 20, {
-      limits: { files: 20 },
+    FilesInterceptor('images', 50, {
+      limits: { files: 50 },
     }),
   )
   @ApiConsumes('multipart/form-data')
