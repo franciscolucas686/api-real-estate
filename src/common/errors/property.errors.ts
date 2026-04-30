@@ -56,3 +56,19 @@ export class InvalidBusinessTypeConfigError extends DomainError {
     super(message);
   }
 }
+
+export class PropertyNotDeletedError extends DomainError {
+  readonly statusCode = HttpStatus.BAD_REQUEST;
+
+  constructor(id: string) {
+    super(`Propriedade com ID ${id} não está deletada`);
+  }
+}
+
+export class PropertyForbiddenError extends DomainError {
+  readonly statusCode = HttpStatus.FORBIDDEN;
+
+  constructor(id: string) {
+    super(`Você não tem permissão para modificar a propriedade ${id}`);
+  }
+}

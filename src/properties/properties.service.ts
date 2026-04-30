@@ -3,6 +3,8 @@ import { BusinessType, Prisma, Property, PropertyType, SaleType } from '@prisma/
 import {
   InvalidBusinessTypeConfigError,
   InvalidSubtypeDataError,
+  PropertyForbiddenError,
+  PropertyNotDeletedError,
   PropertyNotFoundError,
 } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
@@ -426,11 +428,36 @@ export class PropertiesService {
       throw new PropertyNotFoundError(id);
     }
 
-    await this.propertyImagesService.deletePropertyImagesFromR2(id);
+    await this.propertyImagesService.movePropertyImagesToDeleted(id);
 
     return this.prisma.property.update({
       where: { id },
       data: { deletedAt: new Date() },
+    });
+  }
+
+  async restore(id: string, userId: string): Promise<Property> {
+    const property = await this.prisma.property.findUnique({
+      where: { id },
+    });
+
+    if (!property) {
+      throw new PropertyNotFoundError(id);
+    }
+
+    if (!property.deletedAt) {
+      throw new PropertyNotDeletedError(id);
+    }
+
+    if (property.userId !== userId) {
+      throw new PropertyForbiddenError(id);
+    }
+
+    await this.propertyImagesService.restorePropertyImages(id);
+
+    return this.prisma.property.update({
+      where: { id },
+      data: { deletedAt: null },
     });
   }
 
