@@ -165,14 +165,7 @@ export class PropertiesController {
       throw new BadRequestException('Nenhuma imagem foi enviada');
     }
 
-    const result = await this.propertyImagesService.uploadImages(propertyId, files);
-
-    if (roomId) {
-      const imageIds = result.images.map((img) => img.id);
-      await this.propertyRoomsService.assignImagesToRoom(propertyId, { imageIds, roomId });
-    }
-
-    return result;
+    return this.propertyImagesService.uploadImages(propertyId, files, roomId || undefined);
   }
 
   @Throttle({ default: { ttl: 3600, limit: 30 } })
