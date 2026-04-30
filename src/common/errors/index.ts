@@ -5,6 +5,8 @@ export {
   ImageNotFoundError,
   InvalidBusinessTypeConfigError,
   InvalidSubtypeDataError,
+  PropertyForbiddenError,
+  PropertyNotDeletedError,
   PropertyNotFoundError,
   RoomNotBelongToPropertyError,
   RoomNotFoundError,

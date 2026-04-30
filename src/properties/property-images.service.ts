@@ -182,6 +182,56 @@ export class PropertyImagesService {
     }
   }
 
+  async movePropertyImagesToDeleted(propertyId: string): Promise<void> {
+    const images = await this.prisma.propertyImage.findMany({
+      where: { propertyId },
+    });
+
+    if (images.length === 0) return;
+
+    await Promise.all(
+      images.map(async (image) => {
+        try {
+          const sourceKey = this.r2.getObjectKeyFromUrl(image.url);
+          const fileName = sourceKey.slice(sourceKey.indexOf('/') + 1);
+          const destKey = `deleted/${propertyId}/${fileName}`;
+          const newUrl = await this.r2.moveObject(sourceKey, destKey);
+          await this.prisma.propertyImage.update({
+            where: { id: image.id },
+            data: { url: newUrl },
+          });
+        } catch (error) {
+          this.logger.warn(`Erro ao mover imagem ${image.id} para deleted:`, error);
+        }
+      }),
+    );
+  }
+
+  async restorePropertyImages(propertyId: string): Promise<void> {
+    const images = await this.prisma.propertyImage.findMany({
+      where: { propertyId },
+    });
+
+    if (images.length === 0) return;
+
+    await Promise.all(
+      images.map(async (image) => {
+        try {
+          const sourceKey = this.r2.getObjectKeyFromUrl(image.url);
+          const fileName = sourceKey.slice(sourceKey.lastIndexOf('/') + 1);
+          const destKey = `${propertyId}/${fileName}`;
+          const newUrl = await this.r2.moveObject(sourceKey, destKey);
+          await this.prisma.propertyImage.update({
+            where: { id: image.id },
+            data: { url: newUrl },
+          });
+        } catch (error) {
+          this.logger.warn(`Erro ao restaurar imagem ${image.id}:`, error);
+        }
+      }),
+    );
+  }
+
   private async processAndUploadImage(
     propertyId: string,
     file: Express.Multer.File,

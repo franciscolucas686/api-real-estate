@@ -120,6 +120,20 @@ export class PropertiesController {
     await this.propertiesService.remove(id, user.id);
   }
 
+  @Patch(':id/restore')
+  @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
+  @ApiOperation({ summary: 'Restaurar propriedade deletada' })
+  @ApiParam({ name: 'id', description: 'ID da propriedade' })
+  @ApiResponse({ status: 200, description: 'Propriedade restaurada' })
+  @ApiResponse({ status: 400, description: 'Propriedade não está deletada' })
+  @ApiResponse({ status: 403, description: 'Sem permissão' })
+  @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async restore(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: CurrentUserDto) {
+    return this.propertiesService.restore(id, user.id);
+  }
+
   @Post(':propertyId/images')
   @HttpCode(201)
   @UseGuards(JwtGuard)

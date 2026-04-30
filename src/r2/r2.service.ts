@@ -1,4 +1,5 @@
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
   ListObjectsV2Command,
@@ -96,6 +97,52 @@ export class R2Service {
     } catch {
       return imageUrl;
     }
+  }
+
+  async moveObject(sourceKey: string, destinationKey: string): Promise<string> {
+    const { client, bucketName, publicBaseUrl } = this.getConfigured();
+
+    await client.send(
+      new CopyObjectCommand({
+        Bucket: bucketName,
+        CopySource: `${bucketName}/${sourceKey}`,
+        Key: destinationKey,
+      }),
+    );
+
+    await client.send(
+      new DeleteObjectCommand({
+        Bucket: bucketName,
+        Key: sourceKey,
+      }),
+    );
+
+    return `${publicBaseUrl}/${destinationKey}`;
+  }
+
+  async listObjectsByPrefix(prefix: string): Promise<string[]> {
+    const { client, bucketName } = this.getConfigured();
+
+    const keys: string[] = [];
+    let continuationToken: string | undefined;
+
+    do {
+      const list = await client.send(
+        new ListObjectsV2Command({
+          Bucket: bucketName,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }),
+      );
+
+      for (const obj of list.Contents ?? []) {
+        if (obj.Key) keys.push(obj.Key);
+      }
+
+      continuationToken = list.IsTruncated ? list.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    return keys;
   }
 
   async deleteObjectsByPrefix(prefix: string): Promise<void> {
