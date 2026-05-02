@@ -2,8 +2,11 @@ import { ApiProperty } from '@nestjs/swagger';
 import { SunPosition } from '@prisma/client';
 
 export class ApartmentDetailsDto {
+  @ApiProperty()
+  floor!: number;
+
   @ApiProperty({ nullable: true })
-  floor!: number | null;
+  isGroundFloor!: boolean | null;
 
   @ApiProperty()
   hasElevator!: boolean;

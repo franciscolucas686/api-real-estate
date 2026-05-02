@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import {
   ApartmentDetailsDto,
+  CountryHouseDetailsDto,
   CreateApartmentDto,
   CreatePropertyDto,
   FilterPropertyDto,
@@ -19,6 +20,7 @@ import {
   PropertyCardDto,
   PropertyDetailDto,
   PropertyListResponseDto,
+  SmallFarmDetailsDto,
   UpdatePropertyDto,
 } from './dto';
 import { PropertyImagesService } from './property-images.service';
@@ -295,7 +297,13 @@ export class PropertiesService {
       order: img.order,
     }));
 
-    let details: HouseDetailsDto | ApartmentDetailsDto | LandDetailsDto | null = null;
+    let details:
+      | HouseDetailsDto
+      | ApartmentDetailsDto
+      | LandDetailsDto
+      | SmallFarmDetailsDto
+      | CountryHouseDetailsDto
+      | null = null;
 
     if (property.type === PropertyType.HOUSE && property.house) {
       details = {
@@ -307,6 +315,7 @@ export class PropertiesService {
     } else if (property.type === PropertyType.APARTMENT && property.apartment) {
       details = {
         floor: property.apartment.floor,
+        isGroundFloor: property.apartment.isGroundFloor ?? null,
         hasElevator: property.apartment.hasElevator,
         hasBalcony: property.apartment.hasBalcony,
         sunPosition: property.apartment.sunPosition,
@@ -316,6 +325,19 @@ export class PropertiesService {
       details = {
         zoning: property.land.zoning,
         topography: property.land.topography,
+      };
+    } else if (property.type === PropertyType.SMALL_FARM && property.smallfarm) {
+      details = {
+        hasHouse: property.smallfarm.hasHouse,
+        hasPool: property.smallfarm.hasPool,
+        hasLake: property.smallfarm.hasLake,
+        hasFruitTrees: property.smallfarm.hasFruitTrees,
+        waterSource: property.smallfarm.waterSource,
+      };
+    } else if (property.type === PropertyType.COUNTRY_HOUSE && property.countryhouse) {
+      details = {
+        hasRiver: property.countryhouse.hasRiver,
+        hasSpring: property.countryhouse.hasSpring,
       };
     }
 

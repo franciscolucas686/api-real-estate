@@ -1,6 +1,12 @@
 import { ApiExtraModels, ApiProperty, ApiPropertyOptional, getSchemaPath } from '@nestjs/swagger';
 import { BusinessType, PropertyType, SaleType } from '@prisma/client';
-import { ApartmentDetailsDto, HouseDetailsDto, LandDetailsDto } from './subtypes';
+import {
+  ApartmentDetailsDto,
+  CountryHouseDetailsDto,
+  HouseDetailsDto,
+  LandDetailsDto,
+  SmallFarmDetailsDto,
+} from './subtypes';
 
 export class PropertyImageDto {
   @ApiProperty()
@@ -46,7 +52,7 @@ export class GalleryDto {
   rooms!: PropertyRoomDto[];
 }
 
-@ApiExtraModels(HouseDetailsDto, ApartmentDetailsDto, LandDetailsDto)
+@ApiExtraModels(HouseDetailsDto, ApartmentDetailsDto, LandDetailsDto, SmallFarmDetailsDto, CountryHouseDetailsDto)
 export class PropertyDetailDto {
   @ApiProperty()
   id!: string;
@@ -111,11 +117,18 @@ export class PropertyDetailDto {
       { $ref: getSchemaPath(HouseDetailsDto) },
       { $ref: getSchemaPath(ApartmentDetailsDto) },
       { $ref: getSchemaPath(LandDetailsDto) },
+      { $ref: getSchemaPath(SmallFarmDetailsDto) },
+      { $ref: getSchemaPath(CountryHouseDetailsDto) },
     ],
-    description:
-      'Type-specific details. Non-null for HOUSE, APARTMENT, LAND; null for SMALL_FARM and COUNTRY_HOUSE.',
+    description: 'Type-specific details matched to the root type field.',
   })
-  details!: HouseDetailsDto | ApartmentDetailsDto | LandDetailsDto | null;
+  details!:
+    | HouseDetailsDto
+    | ApartmentDetailsDto
+    | LandDetailsDto
+    | SmallFarmDetailsDto
+    | CountryHouseDetailsDto
+    | null;
 
   @ApiProperty({ nullable: true })
   whatsappContact!: string | null;

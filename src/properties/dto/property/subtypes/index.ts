@@ -4,5 +4,7 @@ export { CreateHouseDto } from './create-house.dto';
 export { CreateLandDto } from './create-land.dto';
 export { CreateSmallFarmDto } from './create-small-farm.dto';
 export { ApartmentDetailsDto } from './apartment-details.dto';
+export { CountryHouseDetailsDto } from './country-house-details.dto';
 export { HouseDetailsDto } from './house-details.dto';
 export { LandDetailsDto } from './land-details.dto';
+export { SmallFarmDetailsDto } from './small-farm-details.dto';
