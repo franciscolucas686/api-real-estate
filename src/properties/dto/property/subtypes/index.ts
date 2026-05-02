@@ -3,3 +3,6 @@ export { CreateCountryHouseDto } from './create-country-house.dto';
 export { CreateHouseDto } from './create-house.dto';
 export { CreateLandDto } from './create-land.dto';
 export { CreateSmallFarmDto } from './create-small-farm.dto';
+export { ApartmentDetailsDto } from './apartment-details.dto';
+export { HouseDetailsDto } from './house-details.dto';
+export { LandDetailsDto } from './land-details.dto';
