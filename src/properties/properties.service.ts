@@ -10,12 +10,17 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import {
+  ApartmentDetailsDto,
+  CountryHouseDetailsDto,
   CreateApartmentDto,
   CreatePropertyDto,
   FilterPropertyDto,
+  HouseDetailsDto,
+  LandDetailsDto,
   PropertyCardDto,
   PropertyDetailDto,
   PropertyListResponseDto,
+  SmallFarmDetailsDto,
   UpdatePropertyDto,
 } from './dto';
 import { PropertyImagesService } from './property-images.service';
@@ -292,16 +297,49 @@ export class PropertiesService {
       order: img.order,
     }));
 
-    const subtype =
-      property.house ??
-      property.apartment ??
-      property.land ??
-      property.smallfarm ??
-      property.countryhouse ??
-      null;
-    const details = subtype
-      ? (({ id: _id, propertyId: _pid, ...rest }) => rest)(subtype)
-      : undefined;
+    let details:
+      | HouseDetailsDto
+      | ApartmentDetailsDto
+      | LandDetailsDto
+      | SmallFarmDetailsDto
+      | CountryHouseDetailsDto
+      | null = null;
+
+    if (property.type === PropertyType.HOUSE && property.house) {
+      details = {
+        floors: property.house.floors,
+        isInCondominium: property.house.isInCondominium ?? false,
+        condominiumName: property.house.condominiumName ?? null,
+        condominiumAmenities: property.house.condominiumAmenities ?? null,
+      };
+    } else if (property.type === PropertyType.APARTMENT && property.apartment) {
+      details = {
+        floor: property.apartment.floor,
+        isGroundFloor: property.apartment.isGroundFloor ?? null,
+        hasElevator: property.apartment.hasElevator,
+        hasBalcony: property.apartment.hasBalcony,
+        sunPosition: property.apartment.sunPosition,
+        hasPool: property.apartment.hasPool ?? null,
+      };
+    } else if (property.type === PropertyType.LAND && property.land) {
+      details = {
+        zoning: property.land.zoning,
+        topography: property.land.topography,
+      };
+    } else if (property.type === PropertyType.SMALL_FARM && property.smallfarm) {
+      details = {
+        hasHouse: property.smallfarm.hasHouse,
+        hasPool: property.smallfarm.hasPool,
+        hasLake: property.smallfarm.hasLake,
+        hasFruitTrees: property.smallfarm.hasFruitTrees,
+        waterSource: property.smallfarm.waterSource,
+      };
+    } else if (property.type === PropertyType.COUNTRY_HOUSE && property.countryhouse) {
+      details = {
+        hasRiver: property.countryhouse.hasRiver,
+        hasSpring: property.countryhouse.hasSpring,
+      };
+    }
 
     return {
       id: property.id,
