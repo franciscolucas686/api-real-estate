@@ -457,6 +457,21 @@ export class PropertiesService {
     }
   }
 
+  async hardDelete(id: string, userId: string): Promise<void> {
+    const property = await this.prisma.property.findUnique({ where: { id } });
+
+    if (!property) {
+      throw new PropertyNotFoundError(id);
+    }
+
+    if (property.userId !== userId) {
+      throw new PropertyForbiddenError(id);
+    }
+
+    await this.propertyImagesService.deleteAllPropertyImagesFromR2(id);
+    await this.prisma.property.delete({ where: { id } });
+  }
+
   async remove(id: string, userId: string) {
     const property = await this.prisma.property.findUnique({
       where: { id },
