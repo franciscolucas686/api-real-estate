@@ -35,53 +35,14 @@ const s3 = new S3Client({
   },
 });
 
-// ─── Unsplash photo pools ─────────────────────────────────────────────────────
-
-const PHOTOS: Record<string, string[]> = {
-  living: [
-    'photo-1555041469-a586c61ea9bc',
-    'photo-1493809842364-78817add7ffb',
-    'photo-1567767292278-a4f21aa2d36e',
-    'photo-1560185007-5f0bb1866cab',
-    'photo-1583847268964-b28dc8f51f92',
-  ],
-  kitchen: [
-    'photo-1556909114-f6e7ad7d3136',
-    'photo-1484154218962-a197022b5858',
-    'photo-1556909172-54557c7e4fb7',
-    'photo-1565538810643-b5bdb714032a',
-    'photo-1556909212-d5b604d0c90d',
-  ],
-  bedroom: [
-    'photo-1631049307264-da0ec9d70304',
-    'photo-1505693314120-0d443867891c',
-    'photo-1522771739844-6a9f6d5f14af',
-    'photo-1540518614846-7eded433c457',
-    'photo-1616594039964-ae9021a400a0',
-  ],
-  bathroom: [
-    'photo-1552321554-5fefe8c9ef14',
-    'photo-1507652313519-d4e9174996dd',
-    'photo-1620626011761-996317702149',
-    'photo-1584622650111-993a426fbf0a',
-    'photo-1566417025-cba93e26a5f8',
-  ],
-  exterior: [
-    'photo-1558618666-fcd25c85cd64',
-    'photo-1580587771525-78b9dba3b914',
-    'photo-1568605114967-8130f3a36994',
-    'photo-1512917922-1f1d7cc21a62',
-    'photo-1494526585-d7f6f2b7ec4e',
-  ],
-};
-
 function photoCategory(roomName: string): string {
   const n = roomName.toLowerCase();
-  if (n.includes('sala') || n.includes('jantar')) return 'living';
+  if (n.includes('sala') || n.includes('jantar')) return 'living-room';
   if (n.includes('cozinha')) return 'kitchen';
   if (n.includes('quarto') || n.includes('suite') || n.includes('dormit')) return 'bedroom';
   if (n.includes('banheiro') || n.includes('lavabo')) return 'bathroom';
-  return 'exterior';
+  if (n.includes('externa') || n.includes('jardim')) return 'garden';
+  return 'house-exterior';
 }
 
 // ─── R2 helpers ───────────────────────────────────────────────────────────────
@@ -131,9 +92,12 @@ async function uploadToR2(propertyId: string, buffer: Buffer): Promise<string> {
   return `${r2PublicBaseUrl}/${key}`;
 }
 
-async function fetchBuffer(photoId: string): Promise<Buffer> {
-  const url = `https://images.unsplash.com/${photoId}?w=1920&q=80&auto=format&fit=crop`;
-  const res = await fetch(url, { headers: { Accept: 'image/jpeg,image/*' } });
+async function fetchBuffer(category: string, index: number): Promise<Buffer> {
+  const url = `https://source.unsplash.com/1920x1080/?${category}&sig=${index}`;
+  const res = await fetch(url, {
+    redirect: 'follow',
+    headers: { Accept: 'image/jpeg,image/*' },
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status} ao buscar ${url}`);
   return Buffer.from(await res.arrayBuffer());
 }
@@ -525,13 +489,11 @@ async function seedProperties(userId: string): Promise<void> {
       });
 
       const category = photoCategory(roomName);
-      const pool = PHOTOS[category];
       console.log(`         Sala "${roomName}" (${category}) – 5 imagens`);
 
       for (let ii = 0; ii < 5; ii++) {
-        const photoId = pool[ii];
         try {
-          const buffer = await fetchBuffer(photoId);
+          const buffer = await fetchBuffer(category, pi * 20 + ri * 5 + ii);
           const url = await uploadToR2(property.id, buffer);
           await prisma.propertyImage.create({
             data: {
@@ -544,7 +506,9 @@ async function seedProperties(userId: string): Promise<void> {
           process.stdout.write('.');
         } catch (err) {
           process.stdout.write('!');
-          console.warn(`\n         ⚠ Falha na imagem ${photoId}: ${(err as Error).message}`);
+          console.warn(
+            `\n         ⚠ Falha na imagem (${category} #${ii}): ${(err as Error).message}`,
+          );
         }
       }
 
