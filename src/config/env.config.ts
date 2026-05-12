@@ -29,6 +29,8 @@ const envSchema = z
 
     WHATSAPP_A: z.string().min(8),
     WHATSAPP_B: z.string().min(8),
+
+    ADMIN_SECRET: z.string().min(10, 'ADMIN_SECRET deve ter no mínimo 10 caracteres'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
@@ -39,6 +41,7 @@ const envSchema = z
         'R2_SECRET_ACCESS_KEY',
         'R2_BUCKET_NAME',
         'R2_PUBLIC_BASE_URL',
+        'ADMIN_SECRET',
       ] as const;
 
       requiredInProd.forEach((key) => {

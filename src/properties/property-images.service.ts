@@ -182,6 +182,24 @@ export class PropertyImagesService {
     }
   }
 
+  async deleteAllPropertyImagesFromR2(propertyId: string): Promise<void> {
+    await Promise.all([
+      this.r2
+        .deleteObjectsByPrefix(`${propertyId}/`)
+        .catch((error) =>
+          this.logger.warn(`Erro ao deletar imagens ativas do imóvel ${propertyId} do R2:`, error),
+        ),
+      this.r2
+        .deleteObjectsByPrefix(`deleted/${propertyId}/`)
+        .catch((error) =>
+          this.logger.warn(
+            `Erro ao deletar imagens deletadas do imóvel ${propertyId} do R2:`,
+            error,
+          ),
+        ),
+    ]);
+  }
+
   async movePropertyImagesToDeleted(propertyId: string): Promise<void> {
     const images = await this.prisma.propertyImage.findMany({
       where: { propertyId },

@@ -134,6 +134,21 @@ export class PropertiesController {
     return this.propertiesService.restore(id, user.id);
   }
 
+  @Throttle({ default: { ttl: 60, limit: 10 } })
+  @Delete(':id/hard')
+  @HttpCode(204)
+  @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
+  @ApiOperation({ summary: 'Deletar permanentemente propriedade e todas as suas imagens do R2' })
+  @ApiParam({ name: 'id', description: 'ID da propriedade' })
+  @ApiResponse({ status: 204, description: 'Propriedade permanentemente deletada' })
+  @ApiResponse({ status: 403, description: 'Sem permissão' })
+  @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async hardDelete(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: CurrentUserDto) {
+    await this.propertiesService.hardDelete(id, user.id);
+  }
+
   @Post(':propertyId/images')
   @HttpCode(201)
   @UseGuards(JwtGuard)
