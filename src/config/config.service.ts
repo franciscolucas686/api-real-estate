@@ -65,6 +65,10 @@ export class ConfigService {
     return this.envConfig.WHATSAPP_B;
   }
 
+  get adminSecret(): string {
+    return this.envConfig.ADMIN_SECRET;
+  }
+
   isProduction(): boolean {
     return this.envConfig.NODE_ENV === 'production';
   }

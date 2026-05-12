@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res, UseGuards } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ConfigService } from '../config/config.service';
 import { AuthService } from './auth.service';
@@ -7,6 +7,7 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import { CurrentUserDto } from './dto/current-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { AdminSecretGuard } from './guards/admin-secret.guard';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { JwtGuard } from './guards/jwt.guard';
 
@@ -36,7 +37,13 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(AdminSecretGuard)
   @ApiOperation({ summary: 'Registrar novo usuário' })
+  @ApiHeader({
+    name: 'x-admin-secret',
+    description: 'Chave de acesso administrativo necessária para criar usuários',
+    required: true,
+  })
   @ApiBody({ type: RegisterDto })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -49,6 +56,7 @@ export class AuthController {
     },
   })
   @ApiResponse({ status: 400, description: 'Email já cadastrado' })
+  @ApiResponse({ status: 403, description: 'Acesso não autorizado' })
   async register(@Body() registerDto: RegisterDto, @Res({ passthrough: true }) response: Response) {
     const result = await this.authService.register(registerDto);
 
