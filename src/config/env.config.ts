@@ -13,13 +13,13 @@ const envSchema = z
         message: 'PORT deve ser um número válido',
       }),
 
-    CORS_ORIGIN: z.string().url().optional(),
+    CORS_ORIGIN: z.union([z.url(), z.literal('*')]).optional(),
 
     JWT_SECRET: z.string().min(10, 'JWT_SECRET deve ter no mínimo 10 caracteres'),
 
     JWT_REFRESH_SECRET: z.string().min(10, 'JWT_REFRESH_SECRET deve ter no mínimo 10 caracteres'),
 
-    DATABASE_URL: z.string().url().optional(),
+    DATABASE_URL: z.url().optional(),
 
     R2_ACCOUNT_ID: z.string().optional(),
     R2_ACCESS_KEY_ID: z.string().optional(),
