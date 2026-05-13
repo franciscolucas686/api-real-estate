@@ -35,15 +35,6 @@ const s3 = new S3Client({
   },
 });
 
-function photoCategory(roomName: string): string {
-  const n = roomName.toLowerCase();
-  if (n.includes('sala') || n.includes('jantar')) return 'living-room';
-  if (n.includes('cozinha')) return 'kitchen';
-  if (n.includes('quarto') || n.includes('suite') || n.includes('dormit')) return 'bedroom';
-  if (n.includes('banheiro') || n.includes('lavabo')) return 'bathroom';
-  if (n.includes('externa') || n.includes('jardim')) return 'garden';
-  return 'house-exterior';
-}
 
 // ─── R2 helpers ───────────────────────────────────────────────────────────────
 
@@ -92,11 +83,10 @@ async function uploadToR2(propertyId: string, buffer: Buffer): Promise<string> {
   return `${r2PublicBaseUrl}/${key}`;
 }
 
-async function fetchBuffer(category: string, index: number): Promise<Buffer> {
-  const url = `https://source.unsplash.com/1920x1080/?${category}&sig=${index}`;
+async function fetchBuffer(index: number): Promise<Buffer> {
+  const url = `https://picsum.photos/1920/1080?random=${index}`;
   const res = await fetch(url, {
     redirect: 'follow',
-    headers: { Accept: 'image/jpeg,image/*' },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} ao buscar ${url}`);
   return Buffer.from(await res.arrayBuffer());
@@ -488,12 +478,12 @@ async function seedProperties(userId: string): Promise<void> {
         data: { propertyId: property.id, name: roomName, order: ri },
       });
 
-      const category = photoCategory(roomName);
-      console.log(`         Sala "${roomName}" (${category}) – 5 imagens`);
+      console.log(`         Sala "${roomName}" – 5 imagens`);
 
       for (let ii = 0; ii < 5; ii++) {
         try {
-          const buffer = await fetchBuffer(category, pi * 20 + ri * 5 + ii);
+          const imageIndex = pi * 20 + ri * 5 + ii;
+          const buffer = await fetchBuffer(imageIndex);
           const url = await uploadToR2(property.id, buffer);
           await prisma.propertyImage.create({
             data: {
@@ -507,7 +497,7 @@ async function seedProperties(userId: string): Promise<void> {
         } catch (err) {
           process.stdout.write('!');
           console.warn(
-            `\n         ⚠ Falha na imagem (${category} #${ii}): ${(err as Error).message}`,
+            `\n         ⚠ Falha na imagem (#${ii}): ${(err as Error).message}`,
           );
         }
       }
