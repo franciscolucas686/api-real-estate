@@ -146,6 +146,19 @@ model CountryHouse {
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 }
 
+model LocationCache {
+  id           String    @id @default(uuid())
+  neighborhood String
+  city         String
+  state        String
+  latitude     Float?
+  longitude    Float?
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@unique([neighborhood, city, state])
+}
+
 enum BusinessType {
   RENT
   SALE

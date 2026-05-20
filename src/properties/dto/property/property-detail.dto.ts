@@ -44,6 +44,23 @@ export class PropertySaleTypeDto {
   type!: SaleType;
 }
 
+export class PropertyLocationDto {
+  @ApiProperty({ nullable: true, type: Number })
+  latitude!: number | null;
+
+  @ApiProperty({ nullable: true, type: Number })
+  longitude!: number | null;
+
+  @ApiProperty()
+  neighborhood!: string;
+
+  @ApiProperty()
+  city!: string;
+
+  @ApiProperty()
+  state!: string;
+}
+
 export class GalleryDto {
   @ApiPropertyOptional({ type: [PropertyImageDto] })
   unassigned?: PropertyImageDto[];
@@ -129,6 +146,9 @@ export class PropertyDetailDto {
     | SmallFarmDetailsDto
     | CountryHouseDetailsDto
     | null;
+
+  @ApiProperty({ nullable: true, type: PropertyLocationDto })
+  location!: PropertyLocationDto | null;
 
   @ApiProperty({ nullable: true })
   whatsappContact!: string | null;

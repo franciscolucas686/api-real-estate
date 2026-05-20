@@ -7,6 +7,7 @@ import {
   PropertyNotDeletedError,
   PropertyNotFoundError,
 } from '../common/errors';
+import { LocationCacheService } from '../geocoding';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import {
@@ -33,6 +34,7 @@ export class PropertiesService {
     private readonly prisma: PrismaService,
     private readonly propertyImagesService: PropertyImagesService,
     private readonly whatsappService: WhatsappService,
+    private readonly locationCacheService: LocationCacheService,
   ) {}
 
   async create(createPropertyDto: CreatePropertyDto, userId: string) {
@@ -45,13 +47,25 @@ export class PropertiesService {
 
     const normalizedApartment = apartment ? this.normalizeApartmentFloor(apartment) : apartment;
 
-    return this.createWithRetry(propertyData, userId, saleTypes, {
+    const property = await this.createWithRetry(propertyData, userId, saleTypes, {
       house,
       apartment: normalizedApartment,
       land,
       smallFarm,
       countryHouse,
     });
+
+    try {
+      await this.locationCacheService.getOrResolve(
+        createPropertyDto.neighborhood,
+        createPropertyDto.city,
+        createPropertyDto.state,
+      );
+    } catch {
+      // geocoding failure never blocks property creation
+    }
+
+    return property;
   }
 
   private async createWithRetry(
@@ -297,6 +311,12 @@ export class PropertiesService {
       order: img.order,
     }));
 
+    const coords = await this.locationCacheService.getCoords(
+      property.neighborhood,
+      property.city,
+      property.state,
+    );
+
     let details:
       | HouseDetailsDto
       | ApartmentDetailsDto
@@ -375,6 +395,15 @@ export class PropertiesService {
         })),
       },
       details,
+      location: coords
+        ? {
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            neighborhood: property.neighborhood,
+            city: property.city,
+            state: property.state,
+          }
+        : null,
       whatsappContact: whatsappNumber,
       userId: property.userId,
       createdAt: property.createdAt,
@@ -426,7 +455,7 @@ export class PropertiesService {
     }
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const updatedProperty = await this.prisma.$transaction(async (tx) => {
         if (
           hasSaleTypesUpdate ||
           (hasBusinessTypeUpdate && propertyData.businessType === BusinessType.RENT)
@@ -449,6 +478,18 @@ export class PropertiesService {
           include: { saleTypes: true },
         });
       });
+
+      try {
+        await this.locationCacheService.getOrResolve(
+          updatedProperty.neighborhood,
+          updatedProperty.city,
+          updatedProperty.state,
+        );
+      } catch {
+        // geocoding failure never blocks property update
+      }
+
+      return updatedProperty;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         throw new PropertyNotFoundError(id);
