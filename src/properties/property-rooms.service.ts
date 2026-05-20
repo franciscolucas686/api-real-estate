@@ -7,11 +7,7 @@ import {
   RoomNotFoundError,
 } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  CreatePropertyRoomDto,
-  ReorderPropertyRoomsDto,
-  UpdatePropertyRoomDto,
-} from './dto';
+import { CreatePropertyRoomDto, ReorderPropertyRoomsDto, UpdatePropertyRoomDto } from './dto';
 
 @Injectable()
 export class PropertyRoomsService {
