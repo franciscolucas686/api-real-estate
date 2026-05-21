@@ -6,11 +6,12 @@ import {
   IsEnum,
   IsNumber,
   IsOptional,
-  IsString,
+  IsUUID,
   Matches,
   Min,
   MinLength,
   ValidateNested,
+  IsString,
 } from 'class-validator';
 import {
   CreateApartmentDto,
@@ -105,20 +106,9 @@ export class CreatePropertyDto {
   @Type(() => Number)
   parkingSpaces?: number;
 
-  @ApiProperty({ example: 'SP', description: 'UF da propriedade', minLength: 2 })
-  @IsString({ message: 'Estado deve ser uma string' })
-  @MinLength(2, { message: 'Estado deve ter no mínimo 2 caracteres' })
-  state!: string;
-
-  @ApiProperty({ example: 'São Paulo', description: 'Cidade da propriedade', minLength: 2 })
-  @IsString({ message: 'Cidade deve ser uma string' })
-  @MinLength(2, { message: 'Cidade deve ter no mínimo 2 caracteres' })
-  city!: string;
-
-  @ApiProperty({ example: 'Brooklin', description: 'Bairro da propriedade', minLength: 2 })
-  @IsString({ message: 'Bairro deve ser uma string' })
-  @MinLength(2, { message: 'Bairro deve ter no mínimo 2 caracteres' })
-  neighborhood!: string;
+  @ApiProperty({ example: 'a1b2c3d4-...', description: 'ID do bairro' })
+  @IsUUID('4', { message: 'neighborhoodId deve ser um UUID válido' })
+  neighborhoodId!: string;
 
   @ApiProperty({
     enum: BusinessType,

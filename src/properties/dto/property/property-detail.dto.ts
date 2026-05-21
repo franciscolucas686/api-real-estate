@@ -148,6 +148,8 @@ export class PropertyDetailDto {
     | null;
 
   @ApiProperty({ nullable: true, type: PropertyLocationDto })
+  /** null indica que as coordenadas ainda não foram resolvidas.
+      O frontend deve ocultar o componente de mapa quando null. */
   location!: PropertyLocationDto | null;
 
   @ApiProperty({ nullable: true })
