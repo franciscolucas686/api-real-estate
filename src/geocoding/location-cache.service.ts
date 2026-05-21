@@ -6,11 +6,12 @@ import { GeocodingService } from './geocoding.service';
 /** Resolved coordinates for a neighborhood. null means unresolved — callers must not render a map. */
 export type LocationDto = { latitude: number; longitude: number };
 
-const RETRY_AFTER_MS = 60 * 60 * 1000; // 1 hour
+const RETRY_AFTER_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 @Injectable()
 export class LocationCacheService {
   private readonly logger = new Logger(LocationCacheService.name);
+  private readonly inFlight = new Map<string, Promise<LocationCache>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -21,7 +22,19 @@ export class LocationCacheService {
     return this.prisma.locationCache.findUnique({ where: { neighborhoodId } });
   }
 
-  private async resolve(neighborhoodId: string): Promise<LocationCache> {
+  private resolve(neighborhoodId: string): Promise<LocationCache> {
+    const existing = this.inFlight.get(neighborhoodId);
+    if (existing) return existing;
+
+    const promise = this._resolve(neighborhoodId).finally(() => {
+      this.inFlight.delete(neighborhoodId);
+    });
+
+    this.inFlight.set(neighborhoodId, promise);
+    return promise;
+  }
+
+  private async _resolve(neighborhoodId: string): Promise<LocationCache> {
     const nbh = await this.prisma.neighborhood.findUniqueOrThrow({
       where: { id: neighborhoodId },
       select: { displayName: true, city: true, state: true },
@@ -63,7 +76,9 @@ export class LocationCacheService {
         },
       });
     } catch (err) {
-      this.logger.warn(`Geocoding error for neighborhood ${neighborhoodId}: ${(err as Error).message}`);
+      this.logger.warn(
+        `Geocoding error for neighborhood ${neighborhoodId}: ${(err as Error).message}`,
+      );
 
       return this.prisma.locationCache.upsert({
         where: { neighborhoodId },
