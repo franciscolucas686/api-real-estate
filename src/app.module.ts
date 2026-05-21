@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
@@ -9,6 +10,8 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { CacheInterceptor } from './common/interceptors/cache.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AppConfigModule } from './config/config.module';
+import { GeocodingModule } from './geocoding';
+import { NeighborhoodsModule } from './neighborhoods/neighborhoods.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PropertiesModule } from './properties/properties.module';
 import { R2Module } from './r2/r2.module';
@@ -18,9 +21,12 @@ import { UsersModule } from './users/users.module';
   imports: [
     AppConfigModule,
     PrismaModule,
+    EventEmitterModule.forRoot(),
     AuthModule,
     UsersModule,
     R2Module,
+    GeocodingModule,
+    NeighborhoodsModule,
     PropertiesModule,
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
