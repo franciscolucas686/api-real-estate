@@ -95,7 +95,7 @@ async function fetchBuffer(index: number): Promise<Buffer> {
 // ─── DB cleanup ───────────────────────────────────────────────────────────────
 
 async function cleanDatabase(): Promise<void> {
-  console.log('[2/5] Limpando banco de dados...');
+  console.log('[2/6] Limpando banco de dados...');
 
   const i = await prisma.propertyImage.deleteMany();
   console.log(`      PropertyImage: ${i.count}`);
@@ -117,12 +117,15 @@ async function cleanDatabase(): Promise<void> {
 
   const p = await prisma.property.deleteMany();
   console.log(`      Property: ${p.count}`);
+
+  const lc = await prisma.locationCache.deleteMany();
+  console.log(`      LocationCache: ${lc.count}`);
 }
 
 // ─── Admin user ───────────────────────────────────────────────────────────────
 
 async function seedUser(): Promise<string> {
-  console.log('[3/5] Criando usuário admin...');
+  console.log('[3/6] Criando usuário admin...');
 
   const user = await prisma.user.upsert({
     where: { email: 'admin@imobiliaria.com' },
@@ -434,7 +437,7 @@ function generateCode(): string {
 }
 
 async function seedProperties(userId: string): Promise<void> {
-  console.log(`[4/5] Criando ${PROPERTIES.length} propriedades...`);
+  console.log(`[4/6] Criando ${PROPERTIES.length} propriedades...`);
 
   for (let pi = 0; pi < PROPERTIES.length; pi++) {
     const def = PROPERTIES[pi];
@@ -507,6 +510,72 @@ async function seedProperties(userId: string): Promise<void> {
   }
 }
 
+// ─── Location cache ───────────────────────────────────────────────────────────
+
+async function seedLocationCache(): Promise<void> {
+  console.log('\n[5/6] Geocodificando localizações...');
+
+  const locations = [
+    ...new Map(
+      PROPERTIES.map((p) => [`${p.neighborhood}|${p.city}|${p.state}`, p]),
+    ).values(),
+  ].map((p) => ({ neighborhood: p.neighborhood, city: p.city, state: p.state }));
+
+  let resolved = 0;
+  let failed = 0;
+
+  for (const { neighborhood, city, state } of locations) {
+    const query = `${neighborhood}, ${city}, ${state}, Brasil`;
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'real-estate-api/1.0 (property-map-feature)',
+          'Accept-Language': 'pt-BR,pt;q=0.9',
+        },
+      });
+
+      const data: { lat: string; lon: string }[] = res.ok ? await res.json() : [];
+      const coords = data[0]
+        ? { latitude: parseFloat(data[0].lat), longitude: parseFloat(data[0].lon) }
+        : null;
+
+      await prisma.locationCache.upsert({
+        where: { neighborhood_city_state: { neighborhood, city, state } },
+        create: {
+          neighborhood,
+          city,
+          state,
+          latitude: coords?.latitude ?? null,
+          longitude: coords?.longitude ?? null,
+          resolvedAt: coords ? new Date() : null,
+        },
+        update: {
+          latitude: coords?.latitude ?? null,
+          longitude: coords?.longitude ?? null,
+          resolvedAt: coords ? new Date() : null,
+        },
+      });
+
+      if (coords) {
+        console.log(`      ✓ ${neighborhood}, ${city} → (${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)})`);
+        resolved++;
+      } else {
+        console.log(`      ✗ ${neighborhood}, ${city} → não encontrado`);
+        failed++;
+      }
+    } catch (err) {
+      console.warn(`      ⚠ ${neighborhood}, ${city}: ${(err as Error).message}`);
+      failed++;
+    }
+
+    await new Promise((r) => setTimeout(r, 1100));
+  }
+
+  console.log(`      ${resolved} resolvidos, ${failed} falhas`);
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -516,14 +585,16 @@ async function main(): Promise<void> {
   await cleanDatabase();
   const userId = await seedUser();
   await seedProperties(userId);
+  await seedLocationCache();
 
-  console.log('\n[5/5] Verificando contagens...');
-  const [props, rooms, images] = await Promise.all([
+  console.log('\n[6/6] Verificando contagens...');
+  const [props, rooms, images, lc] = await Promise.all([
     prisma.property.count(),
     prisma.propertyRoom.count(),
     prisma.propertyImage.count(),
+    prisma.locationCache.count(),
   ]);
-  console.log(`      Property: ${props}  PropertyRoom: ${rooms}  PropertyImage: ${images}`);
+  console.log(`      Property: ${props}  PropertyRoom: ${rooms}  PropertyImage: ${images}  LocationCache: ${lc}`);
   console.log('\n✅ Seed concluído!\n');
 }
 

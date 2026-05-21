@@ -18,42 +18,53 @@ model User {
   properties            Property[]
 }
 
+model Neighborhood {
+  id            String         @id @default(uuid())
+  slug          String
+  displayName   String
+  city          String
+  state         String
+  createdAt     DateTime       @default(now())
+  locationCache LocationCache?
+  properties    Property[]
 
+  @@unique([slug, city, state])
+  @@index([city, state])
+}
 
 model Property {
-  id            String             @id @default(uuid())
-  code          String             @unique
-  businessType  BusinessType
-  type          PropertyType
-  price         Decimal
-  rentPrice     Decimal?
-  condoFee      Decimal?
-  images        PropertyImage[]
-  rooms         PropertyRoom[]
-  saleTypes     PropertySaleType[]
-  totalArea     Float?
-  builtArea     Float?
-  bedrooms      Int?
-  bathrooms     Int?
-  suites        Int?
-  parkingSpaces Int?
-  state         String
-  city          String
-  neighborhood  String
-  description   String
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  deletedAt     DateTime?
-  userId        String
-  apartment     Apartment?
-  countryhouse  CountryHouse?
-  house         House?
-  land          Land?
-  smallfarm     SmallFarm?
-  user          User               @relation(fields: [userId], references: [id])
+  id             String             @id @default(uuid())
+  code           String             @unique
+  businessType   BusinessType
+  type           PropertyType
+  price          Decimal
+  rentPrice      Decimal?
+  condoFee       Decimal?
+  images         PropertyImage[]
+  rooms          PropertyRoom[]
+  saleTypes      PropertySaleType[]
+  totalArea      Float?
+  builtArea      Float?
+  bedrooms       Int?
+  bathrooms      Int?
+  suites         Int?
+  parkingSpaces  Int?
+  neighborhoodId String
+  description    String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  deletedAt      DateTime?
+  userId         String
+  apartment      Apartment?
+  countryhouse   CountryHouse?
+  house          House?
+  land           Land?
+  smallfarm      SmallFarm?
+  user           User               @relation(fields: [userId], references: [id])
+  neighborhood   Neighborhood       @relation(fields: [neighborhoodId], references: [id])
 
   @@index([type])
-  @@index([city, neighborhood])
+  @@index([neighborhoodId])
 }
 
 model PropertyRoom {
@@ -108,15 +119,15 @@ model House {
 }
 
 model Apartment {
-  id           String      @id @default(uuid())
-  propertyId   String      @unique
-  floor        Int
+  id            String      @id @default(uuid())
+  propertyId    String      @unique
+  floor         Int
   isGroundFloor Boolean?
-  hasElevator  Boolean
-  hasBalcony   Boolean
-  sunPosition  SunPosition
-  hasPool      Boolean?
-  property     Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  hasElevator   Boolean
+  hasBalcony    Boolean
+  sunPosition   SunPosition
+  hasPool       Boolean?
+  property      Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 }
 
 model Land {
@@ -144,6 +155,25 @@ model CountryHouse {
   hasRiver   Boolean
   hasSpring  Boolean
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model LocationCache {
+  id             String          @id @default(uuid())
+  neighborhoodId String          @unique
+  status         GeocodingStatus @default(PENDING)
+  latitude       Float?
+  longitude      Float?
+  resolvedAt     DateTime?
+  retryAfter     DateTime?
+  createdAt      DateTime        @default(now())
+  neighborhood   Neighborhood    @relation(fields: [neighborhoodId], references: [id])
+}
+
+enum GeocodingStatus {
+  PENDING
+  RESOLVED
+  NOT_FOUND
+  ERROR
 }
 
 enum BusinessType {
