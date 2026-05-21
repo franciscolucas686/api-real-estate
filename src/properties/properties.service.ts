@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { BusinessType, Prisma, Property, PropertyType, SaleType } from '@prisma/client';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { BusinessType, GeocodingStatus, Prisma, Property, PropertyType, SaleType } from '@prisma/client';
 import {
   InvalidBusinessTypeConfigError,
   InvalidSubtypeDataError,
@@ -7,7 +8,6 @@ import {
   PropertyNotDeletedError,
   PropertyNotFoundError,
 } from '../common/errors';
-import { LocationCacheService } from '../geocoding';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import {
@@ -34,7 +34,7 @@ export class PropertiesService {
     private readonly prisma: PrismaService,
     private readonly propertyImagesService: PropertyImagesService,
     private readonly whatsappService: WhatsappService,
-    private readonly locationCacheService: LocationCacheService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(createPropertyDto: CreatePropertyDto, userId: string) {
@@ -55,15 +55,7 @@ export class PropertiesService {
       countryHouse,
     });
 
-    try {
-      await this.locationCacheService.getOrResolve(
-        createPropertyDto.neighborhood,
-        createPropertyDto.city,
-        createPropertyDto.state,
-      );
-    } catch {
-      // geocoding failure never blocks property creation
-    }
+    this.eventEmitter.emit('property.saved', { neighborhoodId: property.neighborhoodId });
 
     return property;
   }
@@ -219,9 +211,9 @@ export class PropertiesService {
           businessType: true,
           price: true,
           rentPrice: true,
-          city: true,
-          state: true,
-          neighborhood: true,
+          neighborhood: {
+            select: { displayName: true, city: true, state: true },
+          },
           bedrooms: true,
           suites: true,
           bathrooms: true,
@@ -252,9 +244,9 @@ export class PropertiesService {
       businessType: property.businessType,
       price: property.price.toString(),
       rentPrice: property.rentPrice?.toString() ?? null,
-      city: property.city,
-      state: property.state,
-      neighborhood: property.neighborhood,
+      city: property.neighborhood.city,
+      state: property.neighborhood.state,
+      neighborhood: property.neighborhood.displayName,
       bedrooms: property.bedrooms,
       bathrooms: property.bathrooms,
       parkingSpaces: property.parkingSpaces,
@@ -295,6 +287,7 @@ export class PropertiesService {
         land: true,
         smallfarm: true,
         countryhouse: true,
+        neighborhood: { include: { locationCache: true } },
       },
     });
 
@@ -311,11 +304,13 @@ export class PropertiesService {
       order: img.order,
     }));
 
-    const coords = await this.locationCacheService.getCoords(
-      property.neighborhood,
-      property.city,
-      property.state,
-    );
+    const cache = property.neighborhood.locationCache;
+    const coords =
+      cache?.status === GeocodingStatus.RESOLVED &&
+      cache.latitude != null &&
+      cache.longitude != null
+        ? { latitude: cache.latitude, longitude: cache.longitude }
+        : null;
 
     let details:
       | HouseDetailsDto
@@ -370,9 +365,9 @@ export class PropertiesService {
       price: property.price.toString(),
       rentPrice: property.rentPrice?.toString() ?? null,
       condoFee: property.condoFee?.toString() ?? null,
-      city: property.city,
-      state: property.state,
-      neighborhood: property.neighborhood,
+      city: property.neighborhood.city,
+      state: property.neighborhood.state,
+      neighborhood: property.neighborhood.displayName,
       description: property.description,
       totalArea: property.totalArea,
       builtArea: property.builtArea,
@@ -399,9 +394,9 @@ export class PropertiesService {
         ? {
             latitude: coords.latitude,
             longitude: coords.longitude,
-            neighborhood: property.neighborhood,
-            city: property.city,
-            state: property.state,
+            neighborhood: property.neighborhood.displayName,
+            city: property.neighborhood.city,
+            state: property.neighborhood.state,
           }
         : null,
       whatsappContact: whatsappNumber,
@@ -479,15 +474,7 @@ export class PropertiesService {
         });
       });
 
-      try {
-        await this.locationCacheService.getOrResolve(
-          updatedProperty.neighborhood,
-          updatedProperty.city,
-          updatedProperty.state,
-        );
-      } catch {
-        // geocoding failure never blocks property update
-      }
+      this.eventEmitter.emit('property.saved', { neighborhoodId: updatedProperty.neighborhoodId });
 
       return updatedProperty;
     } catch (error) {
@@ -562,15 +549,12 @@ export class PropertiesService {
 
     if (filters.type) where.type = filters.type;
 
-    if (filters.city) {
-      where.city = { contains: filters.city, mode: 'insensitive' };
-    }
-    if (filters.neighborhood) {
-      where.neighborhood = { contains: filters.neighborhood, mode: 'insensitive' };
-    }
-    if (filters.state) {
-      where.state = { contains: filters.state, mode: 'insensitive' };
-    }
+    const neighborhoodFilter: Prisma.NeighborhoodWhereInput = {};
+    if (filters.city) neighborhoodFilter.city = { contains: filters.city, mode: 'insensitive' };
+    if (filters.state) neighborhoodFilter.state = { contains: filters.state, mode: 'insensitive' };
+    if (filters.neighborhood)
+      neighborhoodFilter.displayName = { contains: filters.neighborhood, mode: 'insensitive' };
+    if (Object.keys(neighborhoodFilter).length > 0) where.neighborhood = neighborhoodFilter;
 
     const rangeFilters = [
       { key: 'price', min: 'minPrice', max: 'maxPrice' },
