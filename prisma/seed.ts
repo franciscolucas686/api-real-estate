@@ -7,6 +7,7 @@ import {
 import { PrismaPg } from '@prisma/adapter-pg';
 import {
   BusinessType,
+  GeocodingStatus,
   PrismaClient,
   PropertyType,
   SaleType,
@@ -436,6 +437,16 @@ function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+function normalizeSlug(value: string): string {
+  return value
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
+}
+
 async function seedProperties(userId: string): Promise<void> {
   console.log(`[4/6] Criando ${PROPERTIES.length} propriedades...`);
 
@@ -446,15 +457,29 @@ async function seedProperties(userId: string): Promise<void> {
     const property = await prisma.property.create({
       data: {
         code: generateCode(),
-        userId,
+        user: { connect: { id: userId } },
         type: def.type,
         businessType: def.businessType,
         price: def.price,
         ...(def.rentPrice !== undefined && { rentPrice: def.rentPrice }),
         ...(def.condoFee !== undefined && { condoFee: def.condoFee }),
-        city: def.city,
-        state: def.state,
-        neighborhood: def.neighborhood,
+        neighborhood: {
+          connectOrCreate: {
+            where: {
+              slug_city_state: {
+                slug: normalizeSlug(def.neighborhood),
+                city: def.city,
+                state: def.state,
+              },
+            },
+            create: {
+              slug: normalizeSlug(def.neighborhood),
+              displayName: def.neighborhood,
+              city: def.city,
+              state: def.state,
+            },
+          },
+        },
         description: def.description,
         ...(def.totalArea !== undefined && { totalArea: def.totalArea }),
         ...(def.builtArea !== undefined && { builtArea: def.builtArea }),
@@ -541,17 +566,34 @@ async function seedLocationCache(): Promise<void> {
         ? { latitude: parseFloat(data[0].lat), longitude: parseFloat(data[0].lon) }
         : null;
 
-      await prisma.locationCache.upsert({
-        where: { neighborhood_city_state: { neighborhood, city, state } },
+      const nbh = await prisma.neighborhood.upsert({
+        where: {
+          slug_city_state: {
+            slug: normalizeSlug(neighborhood),
+            city,
+            state,
+          },
+        },
         create: {
-          neighborhood,
+          slug: normalizeSlug(neighborhood),
+          displayName: neighborhood,
           city,
           state,
+        },
+        update: {},
+      });
+
+      await prisma.locationCache.upsert({
+        where: { neighborhoodId: nbh.id },
+        create: {
+          neighborhoodId: nbh.id,
+          status: coords ? GeocodingStatus.RESOLVED : GeocodingStatus.NOT_FOUND,
           latitude: coords?.latitude ?? null,
           longitude: coords?.longitude ?? null,
           resolvedAt: coords ? new Date() : null,
         },
         update: {
+          status: coords ? GeocodingStatus.RESOLVED : GeocodingStatus.NOT_FOUND,
           latitude: coords?.latitude ?? null,
           longitude: coords?.longitude ?? null,
           resolvedAt: coords ? new Date() : null,
