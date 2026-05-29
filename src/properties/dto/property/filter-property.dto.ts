@@ -13,10 +13,17 @@ import {
 } from 'class-validator';
 
 export class FilterPropertyDto {
-  @ApiPropertyOptional({ enum: PropertyType, example: PropertyType.HOUSE })
+  @ApiPropertyOptional({
+    enum: PropertyType,
+    isArray: true,
+    example: [PropertyType.HOUSE, PropertyType.APARTMENT],
+    description: 'Filtrar por tipos de propriedade',
+  })
   @IsOptional()
-  @IsEnum(PropertyType)
-  type?: PropertyType;
+  @Transform(({ value }) => (typeof value === 'string' ? [value] : value))
+  @IsArray()
+  @IsEnum(PropertyType, { each: true })
+  types?: PropertyType[];
 
   @ApiPropertyOptional({ enum: BusinessType, example: BusinessType.SALE })
   @IsOptional()
