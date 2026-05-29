@@ -547,7 +547,9 @@ export class PropertiesService {
       deletedAt: null,
     };
 
-    if (filters.type) where.type = filters.type;
+    if (filters.types && filters.types.length > 0) {
+      where.type = { in: filters.types };
+    }
 
     const neighborhoodFilter: Prisma.NeighborhoodWhereInput = {};
     if (filters.city) neighborhoodFilter.city = { contains: filters.city, mode: 'insensitive' };
