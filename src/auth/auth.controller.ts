@@ -131,6 +131,7 @@ export class AuthController {
       example: {
         id: 'uuid',
         email: 'user@example.com',
+        name: 'Lucas',
       },
     },
   })
@@ -139,6 +140,7 @@ export class AuthController {
     return {
       id: user.id,
       email: user.email,
+      name: user.name,
     };
   }
 

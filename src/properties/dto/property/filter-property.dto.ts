@@ -42,6 +42,11 @@ export class FilterPropertyDto {
   @IsEnum(SaleType, { each: true })
   saleTypes?: SaleType[];
 
+  @ApiPropertyOptional({ example: '123456' })
+  @IsOptional()
+  @IsString()
+  code?: string;
+
   @ApiPropertyOptional({ example: 'São Paulo' })
   @IsOptional()
   @IsString()

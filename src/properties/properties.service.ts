@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { BusinessType, GeocodingStatus, Prisma, Property, PropertyType, SaleType } from '@prisma/client';
+import {
+  BusinessType,
+  GeocodingStatus,
+  Prisma,
+  Property,
+  PropertyType,
+  SaleType,
+} from '@prisma/client';
 import {
   InvalidBusinessTypeConfigError,
   InvalidSubtypeDataError,
@@ -549,6 +556,10 @@ export class PropertiesService {
 
     if (filters.types && filters.types.length > 0) {
       where.type = { in: filters.types };
+    }
+
+    if (filters.code) {
+      where.code = { contains: filters.code, mode: 'insensitive' };
     }
 
     const neighborhoodFilter: Prisma.NeighborhoodWhereInput = {};
