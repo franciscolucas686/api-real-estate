@@ -116,40 +116,53 @@ export class PropertiesService {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
     try {
-      return await this.prisma.property.create({
-        data: {
-          ...propertyData,
-          code,
-          userId,
-          neighborhood: {
-            connectOrCreate: {
-              where: {
-                slug_city_state: {
-                  slug: this.normalizeSlug(location.neighborhood),
-                  city: location.city,
-                  state: location.state,
-                },
-              },
-              create: {
+      const createData: Prisma.PropertyCreateInput = {
+        code,
+        user: { connect: { id: userId } },
+        businessType: propertyData.businessType,
+        type: propertyData.type,
+        price: propertyData.price,
+        rentPrice: propertyData.rentPrice,
+        condoFee: propertyData.condoFee,
+        description: propertyData.description,
+        totalArea: propertyData.totalArea,
+        builtArea: propertyData.builtArea,
+        bedrooms: propertyData.bedrooms,
+        bathrooms: propertyData.bathrooms,
+        suites: propertyData.suites,
+        parkingSpaces: propertyData.parkingSpaces,
+        neighborhood: {
+          connectOrCreate: {
+            where: {
+              slug_city_state: {
                 slug: this.normalizeSlug(location.neighborhood),
-                displayName: location.neighborhood,
                 city: location.city,
                 state: location.state,
               },
             },
+            create: {
+              slug: this.normalizeSlug(location.neighborhood),
+              displayName: location.neighborhood,
+              city: location.city,
+              state: location.state,
+            },
           },
-          ...(propertyData.businessType === BusinessType.SALE &&
-            saleTypes && {
-              saleTypes: {
-                create: saleTypes.map((type) => ({ type })),
-              },
-            }),
-          ...(subtypes.house && { house: { create: subtypes.house } }),
-          ...(subtypes.apartment && { apartment: { create: subtypes.apartment } }),
-          ...(subtypes.land && { land: { create: subtypes.land } }),
-          ...(subtypes.smallFarm && { smallfarm: { create: subtypes.smallFarm } }),
-          ...(subtypes.countryHouse && { countryhouse: { create: subtypes.countryHouse } }),
         },
+        ...(propertyData.businessType === BusinessType.SALE &&
+          saleTypes && {
+            saleTypes: {
+              create: saleTypes.map((type) => ({ type })),
+            },
+          }),
+        ...(subtypes.house && { house: { create: subtypes.house } }),
+        ...(subtypes.apartment && { apartment: { create: subtypes.apartment } }),
+        ...(subtypes.land && { land: { create: subtypes.land } }),
+        ...(subtypes.smallFarm && { smallfarm: { create: subtypes.smallFarm } }),
+        ...(subtypes.countryHouse && { countryhouse: { create: subtypes.countryHouse } }),
+      };
+
+      return await this.prisma.property.create({
+        data: createData,
         include: {
           house: true,
           apartment: true,
@@ -538,27 +551,28 @@ export class PropertiesService {
           }
         }
 
-        const updateData: any = { ...propertyData };
-
-        if (hasLocationUpdate) {
-          updateData.neighborhood = {
-            connectOrCreate: {
-              where: {
-                slug_city_state: {
+        const updateData: Prisma.PropertyUpdateInput = {
+          ...propertyData,
+          ...(hasLocationUpdate && {
+            neighborhood: {
+              connectOrCreate: {
+                where: {
+                  slug_city_state: {
+                    slug: this.normalizeSlug(neighborhood!),
+                    city: city!,
+                    state: state!,
+                  },
+                },
+                create: {
                   slug: this.normalizeSlug(neighborhood!),
+                  displayName: neighborhood!,
                   city: city!,
                   state: state!,
                 },
               },
-              create: {
-                slug: this.normalizeSlug(neighborhood!),
-                displayName: neighborhood!,
-                city: city!,
-                state: state!,
-              },
             },
-          };
-        }
+          }),
+        };
 
         return tx.property.update({
           where: { id },

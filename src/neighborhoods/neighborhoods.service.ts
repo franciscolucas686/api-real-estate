@@ -12,7 +12,7 @@ export class NeighborhoodsService {
         ...(city && { city: { equals: city, mode: 'insensitive' } }),
         ...(state && { state: { equals: state, mode: 'insensitive' } }),
       },
-      select: { id: true, displayName: true },
+      select: { displayName: true, city: true, state: true },
       orderBy: { displayName: 'asc' },
     });
   }
