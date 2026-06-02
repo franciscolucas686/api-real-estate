@@ -6,7 +6,6 @@ import {
   IsEnum,
   IsNumber,
   IsOptional,
-  IsUUID,
   Matches,
   Min,
   MinLength,
@@ -106,9 +105,23 @@ export class CreatePropertyDto {
   @Type(() => Number)
   parkingSpaces?: number;
 
-  @ApiProperty({ example: 'a1b2c3d4-...', description: 'ID do bairro' })
-  @IsUUID('4', { message: 'neighborhoodId deve ser um UUID válido' })
-  neighborhoodId!: string;
+  @ApiProperty({ example: 'Brooklin', description: 'Nome do bairro' })
+  @IsString({ message: 'Bairro deve ser uma string' })
+  @MinLength(2, { message: 'Bairro deve ter no mínimo 2 caracteres' })
+  neighborhood!: string;
+
+  @ApiProperty({ example: 'São Paulo', description: 'Cidade' })
+  @IsString({ message: 'Cidade deve ser uma string' })
+  @MinLength(2, { message: 'Cidade deve ter no mínimo 2 caracteres' })
+  city!: string;
+
+  @ApiProperty({ example: 'SP', description: 'Estado (sigla com 2 letras)' })
+  @IsString({ message: 'Estado deve ser uma string' })
+  @MinLength(2, { message: 'Estado deve ter 2 caracteres' })
+  @Matches(/^[A-Z]{2}$/, {
+    message: 'Estado deve ser uma sigla de 2 letras maiúsculas (ex: SP, RJ)',
+  })
+  state!: string;
 
   @ApiProperty({
     enum: BusinessType,

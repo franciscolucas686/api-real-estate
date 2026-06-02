@@ -18,20 +18,25 @@ model User {
   properties            Property[]
 }
 
+/// Bairros são criados automaticamente via connectOrCreate quando uma Property é criada.
+/// O frontend envia (neighborhood, city, state) como strings, e o backend resolve ou cria o Neighborhood.
 model Neighborhood {
   id            String         @id @default(uuid())
-  slug          String
-  displayName   String
-  city          String
-  state         String
+  slug          String         /// Slug normalizado do nome do bairro (lowercase, sem acentos)
+  displayName   String         /// Nome original do bairro (ex: "Brooklín")
+  city          String         /// Cidade (ex: "São Paulo")
+  state         String         /// Sigla do estado (ex: "SP")
   createdAt     DateTime       @default(now())
   locationCache LocationCache?
   properties    Property[]
 
-  @@unique([slug, city, state])
-  @@index([city, state])
+  @@unique([slug, city, state]) /// Garante que não há bairros duplicados (permite "Centro" em cidades diferentes)
+  @@index([city, state]) /// Otimiza busca de bairros por cidade/estado
 }
 
+/// Properties são criadas via API recebendo (neighborhood, city, state) como strings.
+/// O backend usa connectOrCreate para resolver automaticamente o neighborhoodId.
+/// Frontend NÃO envia neighborhoodId - este campo é gerenciado exclusivamente pelo backend.
 model Property {
   id             String             @id @default(uuid())
   code           String             @unique
@@ -49,7 +54,7 @@ model Property {
   bathrooms      Int?
   suites         Int?
   parkingSpaces  Int?
-  neighborhoodId String
+  neighborhoodId String             /// Backend-only: resolvido via connectOrCreate, não exposto na API
   description    String
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt

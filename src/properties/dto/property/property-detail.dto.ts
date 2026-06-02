@@ -69,7 +69,13 @@ export class GalleryDto {
   rooms!: PropertyRoomDto[];
 }
 
-@ApiExtraModels(HouseDetailsDto, ApartmentDetailsDto, LandDetailsDto, SmallFarmDetailsDto, CountryHouseDetailsDto)
+@ApiExtraModels(
+  HouseDetailsDto,
+  ApartmentDetailsDto,
+  LandDetailsDto,
+  SmallFarmDetailsDto,
+  CountryHouseDetailsDto,
+)
 export class PropertyDetailDto {
   @ApiProperty()
   id!: string;
