@@ -45,8 +45,18 @@ export class PropertiesService {
   ) {}
 
   async create(createPropertyDto: CreatePropertyDto, userId: string) {
-    const { house, apartment, land, smallFarm, countryHouse, saleTypes, ...propertyData } =
-      createPropertyDto;
+    const {
+      house,
+      apartment,
+      land,
+      smallFarm,
+      countryHouse,
+      saleTypes,
+      neighborhood,
+      city,
+      state,
+      ...propertyData
+    } = createPropertyDto;
 
     this.validateSubtypeData(createPropertyDto);
     this.validateBusinessTypeConfig(propertyData.businessType, saleTypes);
@@ -54,13 +64,19 @@ export class PropertiesService {
 
     const normalizedApartment = apartment ? this.normalizeApartmentFloor(apartment) : apartment;
 
-    const property = await this.createWithRetry(propertyData, userId, saleTypes, {
-      house,
-      apartment: normalizedApartment,
-      land,
-      smallFarm,
-      countryHouse,
-    });
+    const property = await this.createWithRetry(
+      propertyData,
+      userId,
+      saleTypes,
+      {
+        house,
+        apartment: normalizedApartment,
+        land,
+        smallFarm,
+        countryHouse,
+      },
+      { neighborhood, city, state },
+    );
 
     this.eventEmitter.emit('property.saved', { neighborhoodId: property.neighborhoodId });
 
@@ -70,7 +86,15 @@ export class PropertiesService {
   private async createWithRetry(
     propertyData: Omit<
       CreatePropertyDto,
-      'house' | 'apartment' | 'land' | 'smallFarm' | 'countryHouse' | 'saleTypes'
+      | 'house'
+      | 'apartment'
+      | 'land'
+      | 'smallFarm'
+      | 'countryHouse'
+      | 'saleTypes'
+      | 'neighborhood'
+      | 'city'
+      | 'state'
     >,
     userId: string,
     saleTypes: SaleType[] | undefined,
@@ -80,6 +104,11 @@ export class PropertiesService {
       land?: CreatePropertyDto['land'];
       smallFarm?: CreatePropertyDto['smallFarm'];
       countryHouse?: CreatePropertyDto['countryHouse'];
+    },
+    location: {
+      neighborhood: string;
+      city: string;
+      state: string;
     },
     attempt = 0,
   ): Promise<Property> {
@@ -92,6 +121,23 @@ export class PropertiesService {
           ...propertyData,
           code,
           userId,
+          neighborhood: {
+            connectOrCreate: {
+              where: {
+                slug_city_state: {
+                  slug: this.normalizeSlug(location.neighborhood),
+                  city: location.city,
+                  state: location.state,
+                },
+              },
+              create: {
+                slug: this.normalizeSlug(location.neighborhood),
+                displayName: location.neighborhood,
+                city: location.city,
+                state: location.state,
+              },
+            },
+          },
           ...(propertyData.businessType === BusinessType.SALE &&
             saleTypes && {
               saleTypes: {
@@ -119,7 +165,14 @@ export class PropertiesService {
         error.code === 'P2002' &&
         attempt < maxAttempts
       ) {
-        return this.createWithRetry(propertyData, userId, saleTypes, subtypes, attempt + 1);
+        return this.createWithRetry(
+          propertyData,
+          userId,
+          saleTypes,
+          subtypes,
+          location,
+          attempt + 1,
+        );
       }
       throw error;
     }
@@ -414,11 +467,13 @@ export class PropertiesService {
   }
 
   async update(id: string, updatePropertyDto: UpdatePropertyDto) {
-    const { saleTypes, ...propertyData } = updatePropertyDto;
+    const { saleTypes, neighborhood, city, state, ...propertyData } = updatePropertyDto;
     const hasSaleTypesUpdate = saleTypes !== undefined;
     const hasBusinessTypeUpdate = propertyData.businessType !== undefined;
     const hasSuitesOrBathroomsUpdate =
       propertyData.suites !== undefined || propertyData.bathrooms !== undefined;
+    const hasLocationUpdate =
+      neighborhood !== undefined || city !== undefined || state !== undefined;
 
     // Only fetch current property if we need to validate business rules
     const needsValidation =
@@ -456,6 +511,15 @@ export class PropertiesService {
       }
     }
 
+    // Validate location update: all 3 fields required together
+    if (hasLocationUpdate) {
+      if (!neighborhood || !city || !state) {
+        throw new Error(
+          'Para atualizar a localização, informe todos os campos: neighborhood, city e state',
+        );
+      }
+    }
+
     try {
       const updatedProperty = await this.prisma.$transaction(async (tx) => {
         if (
@@ -474,9 +538,31 @@ export class PropertiesService {
           }
         }
 
+        const updateData: any = { ...propertyData };
+
+        if (hasLocationUpdate) {
+          updateData.neighborhood = {
+            connectOrCreate: {
+              where: {
+                slug_city_state: {
+                  slug: this.normalizeSlug(neighborhood!),
+                  city: city!,
+                  state: state!,
+                },
+              },
+              create: {
+                slug: this.normalizeSlug(neighborhood!),
+                displayName: neighborhood!,
+                city: city!,
+                state: state!,
+              },
+            },
+          };
+        }
+
         return tx.property.update({
           where: { id },
-          data: propertyData,
+          data: updateData,
           include: { saleTypes: true },
         });
       });
@@ -605,5 +691,15 @@ export class PropertiesService {
     }
 
     return where;
+  }
+
+  private normalizeSlug(value: string): string {
+    return value
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
   }
 }
