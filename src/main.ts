@@ -11,6 +11,9 @@ async function bootstrap() {
   const envConfig = validateEnvConfig();
 
   const app = await NestFactory.create(AppModule);
+
+  app.setGlobalPrefix('api');
+
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
