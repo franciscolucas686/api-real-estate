@@ -480,13 +480,30 @@ export class PropertiesService {
   }
 
   async update(id: string, updatePropertyDto: UpdatePropertyDto) {
-    const { saleTypes, neighborhood, city, state, ...propertyData } = updatePropertyDto;
+    const {
+      saleTypes,
+      neighborhood,
+      city,
+      state,
+      house,
+      apartment,
+      land,
+      smallFarm,
+      countryHouse,
+      ...propertyData
+    } = updatePropertyDto;
     const hasSaleTypesUpdate = saleTypes !== undefined;
     const hasBusinessTypeUpdate = propertyData.businessType !== undefined;
     const hasSuitesOrBathroomsUpdate =
       propertyData.suites !== undefined || propertyData.bathrooms !== undefined;
     const hasLocationUpdate =
       neighborhood !== undefined || city !== undefined || state !== undefined;
+    const hasSubtypeUpdate =
+      house !== undefined ||
+      apartment !== undefined ||
+      land !== undefined ||
+      smallFarm !== undefined ||
+      countryHouse !== undefined;
 
     // Only fetch current property if we need to validate business rules
     const needsValidation =
@@ -548,6 +565,45 @@ export class PropertiesService {
                 data: saleTypes.map((type) => ({ propertyId: id, type })),
               });
             }
+          }
+        }
+
+        // Update subtype-specific data
+        if (hasSubtypeUpdate) {
+          if (house) {
+            await tx.house.update({
+              where: { propertyId: id },
+              data: house,
+            });
+          }
+          if (apartment) {
+            // Handle isGroundFloor logic
+            const apartmentData = { ...apartment };
+            if (apartment.isGroundFloor === true) {
+              apartmentData.floor = 0;
+            }
+            await tx.apartment.update({
+              where: { propertyId: id },
+              data: apartmentData,
+            });
+          }
+          if (land) {
+            await tx.land.update({
+              where: { propertyId: id },
+              data: land,
+            });
+          }
+          if (smallFarm) {
+            await tx.smallFarm.update({
+              where: { propertyId: id },
+              data: smallFarm,
+            });
+          }
+          if (countryHouse) {
+            await tx.countryHouse.update({
+              where: { propertyId: id },
+              data: countryHouse,
+            });
           }
         }
 
