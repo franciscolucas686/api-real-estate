@@ -368,7 +368,7 @@ export class PropertiesService {
       throw new PropertyNotFoundError(id);
     }
 
-    const whatsappNumber = this.whatsappService.getWhatsappNumber(id);
+    const whatsappNumber = await this.whatsappService.getWhatsappNumber(id);
     const unassignedImages = property.images.filter((img) => !img.roomId);
     const unassignedMapped = unassignedImages.map((img) => ({
       id: img.id,
