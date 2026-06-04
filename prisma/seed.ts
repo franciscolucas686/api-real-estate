@@ -65,6 +65,7 @@ async function cleanR2(): Promise<void> {
 
 async function uploadToR2(propertyId: string, buffer: Buffer): Promise<string> {
   const compressed = await sharp(buffer)
+    .rotate()
     .resize(1920, 1080, { fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 80 })
     .toBuffer();
