@@ -41,11 +41,11 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  SwaggerModule.setup('docs', app, document);
 
   const port = envConfig.PORT;
   await app.listen(port);
-  logger.log(`Aplicação iniciada em http://localhost:${port}`);
+  logger.log(`Aplicação iniciada em http://localhost:${port}/api`);
   logger.log(`Documentação Swagger disponível em http://localhost:${port}/api/docs`);
 }
 bootstrap().catch((err) => {
