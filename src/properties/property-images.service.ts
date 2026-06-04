@@ -257,6 +257,7 @@ export class PropertyImagesService {
     roomId?: string,
   ): Promise<PropertyImage> {
     const compressedBuffer = await sharp(file.buffer)
+      .rotate()
       .resize(1920, 1080, {
         fit: 'inside',
         withoutEnlargement: true,
