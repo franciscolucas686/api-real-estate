@@ -1,33 +1,75 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import * as crypto from 'crypto';
-import { ConfigService } from '../config/config.service';
+import { WhatsappNumber } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateWhatsappNumberDto, UpdateWhatsappNumberDto } from './dto';
 
 @Injectable()
 export class WhatsappService {
-  private whatsappA: string;
-  private whatsappB: string;
+  constructor(private readonly prisma: PrismaService) {}
 
-  constructor(private readonly configService: ConfigService) {
-    this.whatsappA = configService.whatsappA;
-    this.whatsappB = configService.whatsappB;
-  }
+  async getWhatsappNumber(propertyId: string): Promise<string | null> {
+    const numbers = await this.prisma.whatsappNumber.findMany({
+      where: { isActive: true },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+    });
 
-  getWhatsappNumber(propertyId: string): string {
+    if (numbers.length === 0) {
+      return null;
+    }
+
     const hash = this.calculateHash(propertyId);
     const hashValue = parseInt(hash, 16);
-    const isEven = hashValue % 2 === 0;
+    const index = hashValue % numbers.length;
 
-    return isEven ? this.whatsappA : this.whatsappB;
+    return numbers[index].number;
   }
 
   private calculateHash(propertyId: string): string {
     return crypto.createHash('md5').update(propertyId).digest('hex');
   }
 
-  getWhatsappNumbers() {
-    return {
-      whatsappA: this.whatsappA,
-      whatsappB: this.whatsappB,
-    };
+  async create(createWhatsappNumberDto: CreateWhatsappNumberDto): Promise<WhatsappNumber> {
+    return this.prisma.whatsappNumber.create({
+      data: createWhatsappNumberDto,
+    });
+  }
+
+  async findAll(): Promise<WhatsappNumber[]> {
+    return this.prisma.whatsappNumber.findMany({
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
+  async findOne(id: string): Promise<WhatsappNumber> {
+    const whatsappNumber = await this.prisma.whatsappNumber.findUnique({
+      where: { id },
+    });
+
+    if (!whatsappNumber) {
+      throw new NotFoundException(`WhatsApp number with ID ${id} not found`);
+    }
+
+    return whatsappNumber;
+  }
+
+  async update(
+    id: string,
+    updateWhatsappNumberDto: UpdateWhatsappNumberDto,
+  ): Promise<WhatsappNumber> {
+    await this.findOne(id);
+
+    return this.prisma.whatsappNumber.update({
+      where: { id },
+      data: updateWhatsappNumberDto,
+    });
+  }
+
+  async remove(id: string): Promise<void> {
+    await this.findOne(id);
+
+    await this.prisma.whatsappNumber.delete({
+      where: { id },
+    });
   }
 }

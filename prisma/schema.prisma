@@ -18,6 +18,18 @@ model User {
   properties            Property[]
 }
 
+model WhatsappNumber {
+  id        String   @id @default(uuid())
+  number    String   @unique
+  label     String?
+  isActive  Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, order])
+}
+
 /// Bairros são criados automaticamente via connectOrCreate quando uma Property é criada.
 /// O frontend envia (neighborhood, city, state) como strings, e o backend resolve ou cria o Neighborhood.
 model Neighborhood {
