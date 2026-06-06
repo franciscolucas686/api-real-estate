@@ -67,6 +67,8 @@ model Property {
   suites         Int?
   parkingSpaces  Int?
   neighborhoodId String             /// Backend-only: resolvido via connectOrCreate, não exposto na API
+  latitude       Decimal?           @db.Decimal(10, 7) /// Coordenada geográfica: latitude com precisão de 7 casas decimais
+  longitude      Decimal?           @db.Decimal(11, 7) /// Coordenada geográfica: longitude com precisão de 7 casas decimais
   description    String
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
@@ -82,6 +84,7 @@ model Property {
 
   @@index([type])
   @@index([neighborhoodId])
+  @@index([latitude, longitude])
 }
 
 model PropertyRoom {
