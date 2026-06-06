@@ -4,6 +4,8 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsEnum,
+  IsLatitude,
+  IsLongitude,
   IsNumber,
   IsOptional,
   Matches,
@@ -122,6 +124,26 @@ export class CreatePropertyDto {
     message: 'Estado deve ser uma sigla de 2 letras maiúsculas (ex: SP, RJ)',
   })
   state!: string;
+
+  @ApiPropertyOptional({
+    example: -23.5505,
+    description: 'Latitude da propriedade (opcional, usada para seleção no mapa)',
+  })
+  @IsOptional()
+  @IsNumber({}, { message: 'Latitude deve ser um número' })
+  @IsLatitude({ message: 'Latitude inválida (deve estar entre -90 e 90)' })
+  @Type(() => Number)
+  latitude?: number;
+
+  @ApiPropertyOptional({
+    example: -46.6333,
+    description: 'Longitude da propriedade (opcional, usada para seleção no mapa)',
+  })
+  @IsOptional()
+  @IsNumber({}, { message: 'Longitude deve ser um número' })
+  @IsLongitude({ message: 'Longitude inválida (deve estar entre -180 e 180)' })
+  @Type(() => Number)
+  longitude?: number;
 
   @ApiProperty({
     enum: BusinessType,

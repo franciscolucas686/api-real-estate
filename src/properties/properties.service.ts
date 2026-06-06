@@ -15,6 +15,7 @@ import {
   PropertyNotDeletedError,
   PropertyNotFoundError,
 } from '../common/errors';
+import { GeocodingService } from '../geocoding/geocoding.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import {
@@ -42,6 +43,7 @@ export class PropertiesService {
     private readonly propertyImagesService: PropertyImagesService,
     private readonly whatsappService: WhatsappService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly geocodingService: GeocodingService,
   ) {}
 
   async create(createPropertyDto: CreatePropertyDto, userId: string) {
@@ -52,11 +54,25 @@ export class PropertiesService {
       smallFarm,
       countryHouse,
       saleTypes,
-      neighborhood,
-      city,
-      state,
+      latitude,
+      longitude,
+      neighborhood: neighborhoodInput,
+      city: cityInput,
+      state: stateInput,
       ...propertyData
     } = createPropertyDto;
+
+    let neighborhood = neighborhoodInput;
+    let city = cityInput;
+    let state = stateInput;
+
+    // Se coordenadas forem fornecidas mas localização não, executar reverse geocoding
+    if (latitude != null && longitude != null && (!neighborhood || !city || !state)) {
+      const geocodeResult = await this.geocodingService.reverseGeocode(latitude, longitude);
+      neighborhood = geocodeResult.neighborhood;
+      city = geocodeResult.city;
+      state = geocodeResult.state;
+    }
 
     this.validateSubtypeData(createPropertyDto);
     this.validateBusinessTypeConfig(propertyData.businessType, saleTypes);
@@ -65,7 +81,7 @@ export class PropertiesService {
     const normalizedApartment = apartment ? this.normalizeApartmentFloor(apartment) : apartment;
 
     const property = await this.createWithRetry(
-      propertyData,
+      { ...propertyData, latitude, longitude },
       userId,
       saleTypes,
       {
@@ -131,6 +147,9 @@ export class PropertiesService {
         bathrooms: propertyData.bathrooms,
         suites: propertyData.suites,
         parkingSpaces: propertyData.parkingSpaces,
+        latitude: propertyData.latitude != null ? new Prisma.Decimal(propertyData.latitude) : null,
+        longitude:
+          propertyData.longitude != null ? new Prisma.Decimal(propertyData.longitude) : null,
         neighborhood: {
           connectOrCreate: {
             where: {
@@ -378,12 +397,19 @@ export class PropertiesService {
     }));
 
     const cache = property.neighborhood.locationCache;
+
+    // Priorizar coordenadas diretas da propriedade, usar cache como fallback
     const coords =
-      cache?.status === GeocodingStatus.RESOLVED &&
-      cache.latitude != null &&
-      cache.longitude != null
-        ? { latitude: cache.latitude, longitude: cache.longitude }
-        : null;
+      property.latitude != null && property.longitude != null
+        ? {
+            latitude: Number(property.latitude),
+            longitude: Number(property.longitude),
+          }
+        : cache?.status === GeocodingStatus.RESOLVED &&
+            cache.latitude != null &&
+            cache.longitude != null
+          ? { latitude: cache.latitude, longitude: cache.longitude }
+          : null;
 
     let details:
       | HouseDetailsDto
@@ -482,9 +508,11 @@ export class PropertiesService {
   async update(id: string, updatePropertyDto: UpdatePropertyDto) {
     const {
       saleTypes,
-      neighborhood,
-      city,
-      state,
+      latitude,
+      longitude,
+      neighborhood: neighborhoodInput,
+      city: cityInput,
+      state: stateInput,
       house,
       apartment,
       land,
@@ -492,12 +520,26 @@ export class PropertiesService {
       countryHouse,
       ...propertyData
     } = updatePropertyDto;
+
+    let neighborhood = neighborhoodInput;
+    let city = cityInput;
+    let state = stateInput;
+
+    // Se coordenadas forem fornecidas, executar reverse geocoding para atualizar localização
+    if (latitude != null && longitude != null) {
+      const geocodeResult = await this.geocodingService.reverseGeocode(latitude, longitude);
+      neighborhood = geocodeResult.neighborhood;
+      city = geocodeResult.city;
+      state = geocodeResult.state;
+    }
+
     const hasSaleTypesUpdate = saleTypes !== undefined;
     const hasBusinessTypeUpdate = propertyData.businessType !== undefined;
     const hasSuitesOrBathroomsUpdate =
       propertyData.suites !== undefined || propertyData.bathrooms !== undefined;
     const hasLocationUpdate =
       neighborhood !== undefined || city !== undefined || state !== undefined;
+    const hasCoordinatesUpdate = latitude !== undefined || longitude !== undefined;
     const hasSubtypeUpdate =
       house !== undefined ||
       apartment !== undefined ||
@@ -609,6 +651,10 @@ export class PropertiesService {
 
         const updateData: Prisma.PropertyUpdateInput = {
           ...propertyData,
+          ...(hasCoordinatesUpdate && {
+            latitude: latitude != null ? new Prisma.Decimal(latitude) : null,
+            longitude: longitude != null ? new Prisma.Decimal(longitude) : null,
+          }),
           ...(hasLocationUpdate && {
             neighborhood: {
               connectOrCreate: {
