@@ -348,8 +348,7 @@ export class PropertiesService {
           url: room.images[0].url,
         }));
 
-      const previewImages =
-        roomImages.length > 0 ? roomImages : property.images;
+      const previewImages = roomImages.length > 0 ? roomImages : property.images;
 
       return {
         id: property.id,
