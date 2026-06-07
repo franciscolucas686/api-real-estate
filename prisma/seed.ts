@@ -9,6 +9,7 @@ import {
   BusinessType,
   GeocodingStatus,
   PrismaClient,
+  PropertyStatus,
   PropertyType,
   SaleType,
   SunPosition,
@@ -162,6 +163,8 @@ type PropertyDef = {
   bathrooms?: number;
   suites?: number;
   parkingSpaces?: number;
+  latitude?: number;
+  longitude?: number;
   rooms: string[];
   house?: {
     floors: number;
@@ -462,8 +465,11 @@ async function seedProperties(userId: string): Promise<void> {
         type: def.type,
         businessType: def.businessType,
         price: def.price,
+        status: PropertyStatus.ACTIVE,
         ...(def.rentPrice !== undefined && { rentPrice: def.rentPrice }),
         ...(def.condoFee !== undefined && { condoFee: def.condoFee }),
+        ...(def.latitude !== undefined && { latitude: def.latitude }),
+        ...(def.longitude !== undefined && { longitude: def.longitude }),
         neighborhood: {
           connectOrCreate: {
             where: {
@@ -601,7 +607,22 @@ async function seedLocationCache(): Promise<void> {
         },
       });
 
+      // Update properties in this neighborhood with geocoded coordinates
       if (coords) {
+        await prisma.property.updateMany({
+          where: {
+            neighborhood: {
+              slug: normalizeSlug(neighborhood),
+              city,
+              state,
+            },
+          },
+          data: {
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          },
+        });
+
         console.log(`      ✓ ${neighborhood}, ${city} → (${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)})`);
         resolved++;
       } else {
