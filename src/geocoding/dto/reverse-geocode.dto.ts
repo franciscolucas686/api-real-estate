@@ -3,9 +3,9 @@ import { IsLatitude, IsLongitude, IsNumber } from 'class-validator';
 export class ReverseGeocodeDto {
   @IsNumber()
   @IsLatitude()
-  latitude: number;
+  latitude!: number;
 
   @IsNumber()
   @IsLongitude()
-  longitude: number;
+  longitude!: number;
 }
