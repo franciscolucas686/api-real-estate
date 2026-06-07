@@ -153,6 +153,7 @@ type PropertyDef = {
   price: string;
   rentPrice?: string;
   condoFee?: string;
+  status?: PropertyStatus;
   city: string;
   state: string;
   neighborhood: string;
@@ -199,6 +200,7 @@ const PROPERTIES: PropertyDef[] = [
     saleTypes: [SaleType.DIRECT, SaleType.FINANCING],
     price: '1850000',
     condoFee: '1200',
+    status: PropertyStatus.ACTIVE,
     city: 'São Paulo',
     state: 'SP',
     neighborhood: 'Jardins',
@@ -219,6 +221,7 @@ const PROPERTIES: PropertyDef[] = [
     businessType: BusinessType.RENT,
     price: '12000',
     rentPrice: '12000',
+    status: PropertyStatus.PENDING,
     city: 'Rio de Janeiro',
     state: 'RJ',
     neighborhood: 'Leblon',
@@ -245,6 +248,7 @@ const PROPERTIES: PropertyDef[] = [
     saleTypes: [SaleType.DIRECT],
     price: '680000',
     condoFee: '850',
+    status: PropertyStatus.ACTIVE,
     city: 'São Paulo',
     state: 'SP',
     neighborhood: 'Moema',
@@ -272,6 +276,7 @@ const PROPERTIES: PropertyDef[] = [
     businessType: BusinessType.RENT,
     price: '2800',
     rentPrice: '2800',
+    status: PropertyStatus.DRAFT,
     city: 'Campinas',
     state: 'SP',
     neighborhood: 'Cambuí',
@@ -299,6 +304,7 @@ const PROPERTIES: PropertyDef[] = [
     saleTypes: [SaleType.FINANCING, SaleType.EXCHANGE],
     price: '920000',
     condoFee: '1100',
+    status: PropertyStatus.ACTIVE,
     city: 'Curitiba',
     state: 'PR',
     neighborhood: 'Batel',
@@ -326,6 +332,7 @@ const PROPERTIES: PropertyDef[] = [
     businessType: BusinessType.SALE,
     saleTypes: [SaleType.DIRECT],
     price: '380000',
+    status: PropertyStatus.INACTIVE,
     city: 'Ribeirão Preto',
     state: 'SP',
     neighborhood: 'Vila do Golf',
@@ -341,6 +348,7 @@ const PROPERTIES: PropertyDef[] = [
     businessType: BusinessType.SALE,
     saleTypes: [SaleType.DIRECT, SaleType.EXCHANGE],
     price: '750000',
+    status: PropertyStatus.PENDING,
     city: 'Sorocaba',
     state: 'SP',
     neighborhood: 'Zona Rural',
@@ -366,6 +374,7 @@ const PROPERTIES: PropertyDef[] = [
     businessType: BusinessType.SALE,
     saleTypes: [SaleType.DIRECT],
     price: '1200000',
+    status: PropertyStatus.ACTIVE,
     city: 'Atibaia',
     state: 'SP',
     neighborhood: 'Vale das Flores',
@@ -387,6 +396,7 @@ const PROPERTIES: PropertyDef[] = [
     saleTypes: [SaleType.DIRECT, SaleType.FINANCING, SaleType.EXCHANGE],
     price: '3200000',
     condoFee: '3500',
+    status: PropertyStatus.ACTIVE,
     city: 'Florianópolis',
     state: 'SC',
     neighborhood: 'Jurerê Internacional',
@@ -413,6 +423,7 @@ const PROPERTIES: PropertyDef[] = [
     price: '4500',
     rentPrice: '4500',
     condoFee: '600',
+    status: PropertyStatus.DRAFT,
     city: 'Brasília',
     state: 'DF',
     neighborhood: 'Asa Sul',
@@ -465,7 +476,7 @@ async function seedProperties(userId: string): Promise<void> {
         type: def.type,
         businessType: def.businessType,
         price: def.price,
-        status: PropertyStatus.ACTIVE,
+        status: def.status ?? PropertyStatus.ACTIVE,
         ...(def.rentPrice !== undefined && { rentPrice: def.rentPrice }),
         ...(def.condoFee !== undefined && { condoFee: def.condoFee }),
         ...(def.latitude !== undefined && { latitude: def.latitude }),
