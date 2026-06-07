@@ -46,7 +46,7 @@ async function bootstrap() {
   const port = envConfig.PORT;
   await app.listen(port);
   logger.log(`Aplicação iniciada em http://localhost:${port}/api`);
-  logger.log(`Documentação Swagger disponível em http://localhost:${port}/api/docs`);
+  logger.log(`Documentação Swagger disponível em http://localhost:${port}/docs`);
 }
 bootstrap().catch((err) => {
   logger.error('Erro ao inicializar o app:', err);
