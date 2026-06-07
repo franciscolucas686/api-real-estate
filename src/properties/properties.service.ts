@@ -326,32 +326,48 @@ export class PropertiesService {
               },
             },
           },
+          images: {
+            where: { roomId: null },
+            orderBy: { createdAt: 'asc' },
+            take: PREVIEW_LIMIT_ROOMS,
+            select: {
+              id: true,
+              url: true,
+            },
+          },
         },
       }),
       this.prisma.property.count({ where }),
     ]);
 
-    const data: PropertyCardDto[] = properties.map((property) => ({
-      id: property.id,
-      code: property.code,
-      type: property.type,
-      businessType: property.businessType,
-      status: property.status,
-      price: property.price.toString(),
-      rentPrice: property.rentPrice?.toString() ?? null,
-      city: property.neighborhood.city,
-      state: property.neighborhood.state,
-      neighborhood: property.neighborhood.displayName,
-      bedrooms: property.bedrooms,
-      bathrooms: property.bathrooms,
-      parkingSpaces: property.parkingSpaces,
-      previewImages: property.rooms
+    const data: PropertyCardDto[] = properties.map((property) => {
+      const roomImages = property.rooms
         .filter((room) => room.images.length > 0)
         .map((room) => ({
           id: room.images[0].id,
           url: room.images[0].url,
-        })),
-    }));
+        }));
+
+      const previewImages =
+        roomImages.length > 0 ? roomImages : property.images;
+
+      return {
+        id: property.id,
+        code: property.code,
+        type: property.type,
+        businessType: property.businessType,
+        status: property.status,
+        price: property.price.toString(),
+        rentPrice: property.rentPrice?.toString() ?? null,
+        city: property.neighborhood.city,
+        state: property.neighborhood.state,
+        neighborhood: property.neighborhood.displayName,
+        bedrooms: property.bedrooms,
+        bathrooms: property.bathrooms,
+        parkingSpaces: property.parkingSpaces,
+        previewImages,
+      };
+    });
 
     return {
       data,
