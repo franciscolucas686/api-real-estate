@@ -22,7 +22,10 @@ export class PropertyCardDto {
   @ApiProperty({ enum: BusinessType })
   businessType!: BusinessType;
 
-  @ApiProperty({ enum: PropertyStatus, description: 'Status da propriedade (DRAFT, PENDING, ACTIVE, INACTIVE)' })
+  @ApiProperty({
+    enum: PropertyStatus,
+    description: 'Status da propriedade (DRAFT, PENDING, ACTIVE, INACTIVE)',
+  })
   status!: PropertyStatus;
 
   @ApiProperty({ type: String })
