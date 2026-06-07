@@ -57,6 +57,7 @@ model Property {
   price          Decimal
   rentPrice      Decimal?
   condoFee       Decimal?
+  status         PropertyStatus     @default(DRAFT)
   images         PropertyImage[]
   rooms          PropertyRoom[]
   saleTypes      PropertySaleType[]
@@ -187,6 +188,13 @@ model LocationCache {
   retryAfter     DateTime?
   createdAt      DateTime        @default(now())
   neighborhood   Neighborhood    @relation(fields: [neighborhoodId], references: [id])
+}
+
+enum PropertyStatus {
+  DRAFT
+  PENDING
+  ACTIVE
+  INACTIVE
 }
 
 enum GeocodingStatus {

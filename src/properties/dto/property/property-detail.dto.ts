@@ -1,5 +1,5 @@
 import { ApiExtraModels, ApiProperty, ApiPropertyOptional, getSchemaPath } from '@nestjs/swagger';
-import { BusinessType, PropertyType, SaleType } from '@prisma/client';
+import { BusinessType, PropertyStatus, PropertyType, SaleType } from '@prisma/client';
 import {
   ApartmentDetailsDto,
   CountryHouseDetailsDto,
@@ -88,6 +88,9 @@ export class PropertyDetailDto {
 
   @ApiProperty({ enum: BusinessType })
   businessType!: BusinessType;
+
+  @ApiProperty({ enum: PropertyStatus, description: 'Status da propriedade (DRAFT, PENDING, ACTIVE, INACTIVE)' })
+  status!: PropertyStatus;
 
   @ApiProperty({ type: [PropertySaleTypeDto] })
   saleTypes!: PropertySaleTypeDto[];
