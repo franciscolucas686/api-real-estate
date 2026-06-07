@@ -50,7 +50,6 @@ export class AuthController {
     description: 'Usuário registrado com sucesso',
     schema: {
       example: {
-        accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
         user: { id: 'uuid', email: 'user@example.com', name: 'João' },
       },
     },
@@ -58,13 +57,12 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Email já cadastrado' })
   @ApiResponse({ status: 403, description: 'Acesso não autorizado' })
   async register(@Body() registerDto: RegisterDto, @Res({ passthrough: true }) response: Response) {
-    const result = await this.authService.register(registerDto);
+    const { accessToken, refreshToken, user } = await this.authService.register(registerDto);
 
-    this.setAuthCookies(response, result.accessToken, result.refreshToken);
+    this.setAuthCookies(response, accessToken, refreshToken);
 
     return {
-      accessToken: result.accessToken,
-      user: result.user,
+      user,
     };
   }
 
@@ -77,20 +75,18 @@ export class AuthController {
     description: 'Login realizado com sucesso',
     schema: {
       example: {
-        accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
         user: { id: 'uuid', email: 'user@example.com', name: 'João' },
       },
     },
   })
   @ApiResponse({ status: 401, description: 'Email ou senha inválidos' })
   async login(@Body() loginDto: LoginDto, @Res({ passthrough: true }) response: Response) {
-    const result = await this.authService.login(loginDto);
+    const { accessToken, refreshToken, user } = await this.authService.login(loginDto);
 
-    this.setAuthCookies(response, result.accessToken, result.refreshToken);
+    this.setAuthCookies(response, accessToken, refreshToken);
 
     return {
-      accessToken: result.accessToken,
-      user: result.user,
+      user,
     };
   }
 
@@ -102,9 +98,7 @@ export class AuthController {
     status: HttpStatus.OK,
     description: 'Token atualizado com sucesso',
     schema: {
-      example: {
-        accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-      },
+      example: {},
     },
   })
   @ApiResponse({ status: 401, description: 'Refresh token inválido' })
@@ -112,13 +106,11 @@ export class AuthController {
     @CurrentUser() user: CurrentUserDto,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const result = await this.authService.refreshToken(user.id);
+    const { accessToken, refreshToken } = await this.authService.refreshToken(user.id);
 
-    this.setAuthCookies(response, result.accessToken, result.refreshToken);
+    this.setAuthCookies(response, accessToken, refreshToken);
 
-    return {
-      accessToken: result.accessToken,
-    };
+    return {};
   }
 
   @Get('me')

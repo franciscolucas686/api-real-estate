@@ -35,10 +35,11 @@ export class AuthService {
       name,
     });
 
-    const tokens = await this.generateTokens(user.id, user.email);
+    const { accessToken, refreshToken } = await this.generateTokens(user.id, user.email);
 
     return {
-      ...tokens,
+      accessToken,
+      refreshToken,
       user,
     };
   }
@@ -56,10 +57,11 @@ export class AuthService {
       throw new InvalidCredentialsError();
     }
 
-    const tokens = await this.generateTokens(user.id, user.email);
+    const { accessToken, refreshToken } = await this.generateTokens(user.id, user.email);
 
     return {
-      ...tokens,
+      accessToken,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -74,9 +76,9 @@ export class AuthService {
       throw new UserNotFoundError();
     }
 
-    const tokens = await this.generateTokens(user.id, user.email);
+    const { accessToken, refreshToken } = await this.generateTokens(user.id, user.email);
 
-    return tokens;
+    return { accessToken, refreshToken };
   }
 
   async logout(userId: string) {
@@ -105,6 +107,6 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-    };
+    } as const;
   }
 }
