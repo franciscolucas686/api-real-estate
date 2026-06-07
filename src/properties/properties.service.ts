@@ -5,6 +5,7 @@ import {
   GeocodingStatus,
   Prisma,
   Property,
+  PropertyStatus,
   PropertyType,
   SaleType,
 } from '@prisma/client';
@@ -301,6 +302,7 @@ export class PropertiesService {
           code: true,
           type: true,
           businessType: true,
+          status: true,
           price: true,
           rentPrice: true,
           neighborhood: {
@@ -334,6 +336,7 @@ export class PropertiesService {
       code: property.code,
       type: property.type,
       businessType: property.businessType,
+      status: property.status,
       price: property.price.toString(),
       rentPrice: property.rentPrice?.toString() ?? null,
       city: property.neighborhood.city,
@@ -360,7 +363,7 @@ export class PropertiesService {
 
   async findOne(id: string): Promise<PropertyDetailDto> {
     const property = await this.prisma.property.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, deletedAt: null, status: PropertyStatus.ACTIVE },
       include: {
         images: {
           orderBy: { order: 'asc' },
@@ -460,6 +463,7 @@ export class PropertiesService {
       code: property.code,
       type: property.type,
       businessType: property.businessType,
+      status: property.status,
       saleTypes: property.saleTypes.map((st) => ({ id: st.id, type: st.type })),
       price: property.price.toString(),
       rentPrice: property.rentPrice?.toString() ?? null,
@@ -754,6 +758,7 @@ export class PropertiesService {
   private buildWhereClause(filters: Partial<FilterPropertyDto>): Prisma.PropertyWhereInput {
     const where: Prisma.PropertyWhereInput = {
       deletedAt: null,
+      status: PropertyStatus.ACTIVE,
     };
 
     if (filters.types && filters.types.length > 0) {

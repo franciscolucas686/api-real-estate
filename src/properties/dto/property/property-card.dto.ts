@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { BusinessType, PropertyType } from '@prisma/client';
+import { BusinessType, PropertyStatus, PropertyType } from '@prisma/client';
 
 export class PreviewImageDto {
   @ApiProperty()
@@ -21,6 +21,12 @@ export class PropertyCardDto {
 
   @ApiProperty({ enum: BusinessType })
   businessType!: BusinessType;
+
+  @ApiProperty({
+    enum: PropertyStatus,
+    description: 'Status da propriedade (DRAFT, PENDING, ACTIVE, INACTIVE)',
+  })
+  status!: PropertyStatus;
 
   @ApiProperty({ type: String })
   price!: string;
