@@ -33,7 +33,6 @@ async function bootstrap() {
       'API para gerenciamento de propriedades imobiliárias com autenticação JWT, upload de imagens e filtros avançados',
     )
     .setVersion('1.0')
-    .addBearerAuth()
     .addCookieAuth('accessToken')
     .addTag('Auth', 'Autenticação e autorização')
     .addTag('Properties', 'Gerenciamento de propriedades')
