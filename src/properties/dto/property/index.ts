@@ -9,4 +9,5 @@ export {
   GalleryDto,
 } from './property-detail.dto';
 export { UpdatePropertyDto } from './update-property.dto';
+export { UpdatePropertyStatusDto } from './update-status.dto';
 export * from './subtypes';

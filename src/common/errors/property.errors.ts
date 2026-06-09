@@ -72,3 +72,11 @@ export class PropertyForbiddenError extends DomainError {
     super(`Você não tem permissão para modificar a propriedade ${id}`);
   }
 }
+
+export class InvalidStatusTransitionError extends DomainError {
+  readonly statusCode = HttpStatus.BAD_REQUEST;
+
+  constructor(from: string, to: string) {
+    super(`Transição de status inválida: ${from} → ${to}`);
+  }
+}
