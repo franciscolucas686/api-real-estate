@@ -719,11 +719,7 @@ export class PropertiesService {
     }
   }
 
-  async updateStatus(
-    id: string,
-    status: PropertyStatus,
-    context: { isAdmin: boolean },
-  ): Promise<Property> {
+  async updateStatus(id: string, status: PropertyStatus): Promise<Property> {
     const property = await this.prisma.property.findUnique({
       where: { id },
       select: { status: true },
@@ -731,7 +727,7 @@ export class PropertiesService {
 
     if (!property) throw new PropertyNotFoundError(id);
 
-    this.propertyStatusService.validateTransition(property.status, status, context);
+    this.propertyStatusService.validateTransition(property.status, status);
 
     try {
       return await this.prisma.property.update({

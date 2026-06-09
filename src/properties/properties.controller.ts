@@ -26,7 +26,6 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUserDto } from '../auth/dto/current-user.dto';
-import { AdminSecretGuard } from '../auth/guards/admin-secret.guard';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 import { CacheKey, CacheTTL, InvalidateCache } from '../common/decorators/cache.decorator';
 import {
@@ -139,7 +138,7 @@ export class PropertiesController {
   @Patch(':id/status')
   @UseGuards(JwtGuard)
   @InvalidateCache('/properties')
-  @ApiOperation({ summary: 'Atualizar status da propriedade (usuário autenticado)' })
+  @ApiOperation({ summary: 'Atualizar status da propriedade' })
   @ApiParam({ name: 'id', description: 'ID da propriedade' })
   @ApiBody({ type: UpdatePropertyStatusDto })
   @ApiResponse({ status: 200, description: 'Status atualizado' })
@@ -150,24 +149,7 @@ export class PropertiesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdatePropertyStatusDto,
   ) {
-    return this.propertiesService.updateStatus(id, dto.status, { isAdmin: false });
-  }
-
-  @Patch(':id/admin/status')
-  @UseGuards(AdminSecretGuard)
-  @InvalidateCache('/properties')
-  @ApiOperation({ summary: 'Atualizar status da propriedade (admin)' })
-  @ApiParam({ name: 'id', description: 'ID da propriedade' })
-  @ApiBody({ type: UpdatePropertyStatusDto })
-  @ApiResponse({ status: 200, description: 'Status atualizado pelo admin' })
-  @ApiResponse({ status: 400, description: 'Transição de status inválida' })
-  @ApiResponse({ status: 403, description: 'Acesso não autorizado' })
-  @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
-  async adminUpdateStatus(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdatePropertyStatusDto,
-  ) {
-    return this.propertiesService.updateStatus(id, dto.status, { isAdmin: true });
+    return this.propertiesService.updateStatus(id, dto.status);
   }
 
   @Throttle({ default: { ttl: 60, limit: 10 } })
