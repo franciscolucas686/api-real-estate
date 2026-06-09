@@ -26,6 +26,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUserDto } from '../auth/dto/current-user.dto';
+import { AdminSecretGuard } from '../auth/guards/admin-secret.guard';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 import { CacheKey, CacheTTL, InvalidateCache } from '../common/decorators/cache.decorator';
 import {
@@ -38,6 +39,7 @@ import {
   UpdatePropertyDto,
   UpdatePropertyImageDto,
   UpdatePropertyRoomDto,
+  UpdatePropertyStatusDto,
 } from './dto';
 import { PropertyImagesService } from './property-images.service';
 import { PropertyRoomsService } from './property-rooms.service';
@@ -132,6 +134,40 @@ export class PropertiesController {
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   async restore(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: CurrentUserDto) {
     return this.propertiesService.restore(id, user.id);
+  }
+
+  @Patch(':id/status')
+  @UseGuards(JwtGuard)
+  @InvalidateCache('/properties')
+  @ApiOperation({ summary: 'Atualizar status da propriedade (usuário autenticado)' })
+  @ApiParam({ name: 'id', description: 'ID da propriedade' })
+  @ApiBody({ type: UpdatePropertyStatusDto })
+  @ApiResponse({ status: 200, description: 'Status atualizado' })
+  @ApiResponse({ status: 400, description: 'Transição de status inválida' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
+  async updateStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePropertyStatusDto,
+  ) {
+    return this.propertiesService.updateStatus(id, dto.status, { isAdmin: false });
+  }
+
+  @Patch(':id/admin/status')
+  @UseGuards(AdminSecretGuard)
+  @InvalidateCache('/properties')
+  @ApiOperation({ summary: 'Atualizar status da propriedade (admin)' })
+  @ApiParam({ name: 'id', description: 'ID da propriedade' })
+  @ApiBody({ type: UpdatePropertyStatusDto })
+  @ApiResponse({ status: 200, description: 'Status atualizado pelo admin' })
+  @ApiResponse({ status: 400, description: 'Transição de status inválida' })
+  @ApiResponse({ status: 403, description: 'Acesso não autorizado' })
+  @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
+  async adminUpdateStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePropertyStatusDto,
+  ) {
+    return this.propertiesService.updateStatus(id, dto.status, { isAdmin: true });
   }
 
   @Throttle({ default: { ttl: 60, limit: 10 } })

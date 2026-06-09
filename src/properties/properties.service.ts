@@ -16,6 +16,7 @@ import {
   PropertyNotDeletedError,
   PropertyNotFoundError,
 } from '../common/errors';
+import { PropertyStatusService } from './property-status.service';
 import { GeocodingService } from '../geocoding/geocoding.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
@@ -45,6 +46,7 @@ export class PropertiesService {
     private readonly whatsappService: WhatsappService,
     private readonly eventEmitter: EventEmitter2,
     private readonly geocodingService: GeocodingService,
+    private readonly propertyStatusService: PropertyStatusService,
   ) {}
 
   async create(createPropertyDto: CreatePropertyDto, userId: string) {
@@ -545,7 +547,11 @@ export class PropertiesService {
     let state = stateInput;
 
     // Se coordenadas forem fornecidas e localização não foi fornecida, executar reverse geocoding
-    if (latitude != null && longitude != null && (!neighborhoodInput || !cityInput || !stateInput)) {
+    if (
+      latitude != null &&
+      longitude != null &&
+      (!neighborhoodInput || !cityInput || !stateInput)
+    ) {
       const geocodeResult = await this.geocodingService.reverseGeocode(latitude, longitude);
       neighborhood = geocodeResult.neighborhood;
       city = geocodeResult.city;
@@ -705,6 +711,33 @@ export class PropertiesService {
       this.eventEmitter.emit('property.saved', { neighborhoodId: updatedProperty.neighborhoodId });
 
       return updatedProperty;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new PropertyNotFoundError(id);
+      }
+      throw error;
+    }
+  }
+
+  async updateStatus(
+    id: string,
+    status: PropertyStatus,
+    context: { isAdmin: boolean },
+  ): Promise<Property> {
+    const property = await this.prisma.property.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+
+    if (!property) throw new PropertyNotFoundError(id);
+
+    this.propertyStatusService.validateTransition(property.status, status, context);
+
+    try {
+      return await this.prisma.property.update({
+        where: { id },
+        data: { status },
+      });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         throw new PropertyNotFoundError(id);

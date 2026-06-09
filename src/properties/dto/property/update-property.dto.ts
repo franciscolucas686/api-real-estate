@@ -1,5 +1,5 @@
 import { ApiPropertyOptional, OmitType, PartialType } from '@nestjs/swagger';
-import { PropertyStatus, SaleType } from '@prisma/client';
+import { SaleType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsArray, IsEnum, IsOptional, ValidateNested } from 'class-validator';
 import { CreatePropertyDto } from './create-property.dto';
@@ -14,15 +14,6 @@ import {
 export class UpdatePropertyDto extends PartialType(
   OmitType(CreatePropertyDto, ['house', 'apartment', 'land', 'smallFarm', 'countryHouse'] as const),
 ) {
-  @ApiPropertyOptional({
-    enum: PropertyStatus,
-    example: PropertyStatus.ACTIVE,
-    description: 'Status da propriedade (DRAFT, PENDING, ACTIVE, INACTIVE)',
-  })
-  @IsOptional()
-  @IsEnum(PropertyStatus, { message: 'Status de propriedade inválido' })
-  status?: PropertyStatus;
-
   @ApiPropertyOptional({
     enum: SaleType,
     isArray: true,

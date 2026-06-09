@@ -8,6 +8,7 @@ import { PropertiesService } from './properties.service';
 import { PropertyCleanupService } from './property-cleanup.service';
 import { PropertyImagesService } from './property-images.service';
 import { PropertyRoomsService } from './property-rooms.service';
+import { PropertyStatusService } from './property-status.service';
 
 @Module({
   imports: [PrismaModule, R2Module, WhatsappModule, GeocodingModule],
@@ -17,6 +18,7 @@ import { PropertyRoomsService } from './property-rooms.service';
     PropertyImagesService,
     PropertyRoomsService,
     PropertyCleanupService,
+    PropertyStatusService,
   ],
   exports: [PropertiesService],
 })

@@ -4,6 +4,7 @@ export {
   ImageNotBelongToPropertyError,
   ImageNotFoundError,
   InvalidBusinessTypeConfigError,
+  InvalidStatusTransitionError,
   InvalidSubtypeDataError,
   PropertyForbiddenError,
   PropertyNotDeletedError,
