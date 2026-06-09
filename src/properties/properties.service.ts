@@ -544,8 +544,8 @@ export class PropertiesService {
     let city = cityInput;
     let state = stateInput;
 
-    // Se coordenadas forem fornecidas, executar reverse geocoding para atualizar localização
-    if (latitude != null && longitude != null) {
+    // Se coordenadas forem fornecidas e localização não foi fornecida, executar reverse geocoding
+    if (latitude != null && longitude != null && (!neighborhoodInput || !cityInput || !stateInput)) {
       const geocodeResult = await this.geocodingService.reverseGeocode(latitude, longitude);
       neighborhood = geocodeResult.neighborhood;
       city = geocodeResult.city;
