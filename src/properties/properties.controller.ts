@@ -145,10 +145,7 @@ export class PropertiesController {
   @ApiResponse({ status: 400, description: 'Transição de status inválida' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
-  async updateStatus(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdatePropertyStatusDto,
-  ) {
+  async updateStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePropertyStatusDto) {
     return this.propertiesService.updateStatus(id, dto.status);
   }
 

@@ -9,7 +9,7 @@ export class NeighborhoodsController {
   constructor(private readonly neighborhoodsService: NeighborhoodsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List neighborhoods, optionally filtered by city and state' })
+  @ApiOperation({ summary: 'Lista de bairros, opcionalmente filtrada por cidade e estado' })
   findAll(@Query() query: NeighborhoodQueryDto): Promise<NeighborhoodItemDto[]> {
     return this.neighborhoodsService.findAll(query.city, query.state);
   }
