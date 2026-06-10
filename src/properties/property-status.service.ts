@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PropertyStatus } from '@prisma/client';
 import { InvalidStatusTransitionError } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,7 +13,10 @@ const ALLOWED_TRANSITIONS: Partial<Record<PropertyStatus, PropertyStatus[]>> = {
 
 @Injectable()
 export class PropertyStatusService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   meetsMinimumRequirements(imageCount: number): boolean {
     return imageCount >= 1;
@@ -54,5 +58,7 @@ export class PropertyStatusService {
       where: { id: propertyId },
       data: { status: newStatus },
     });
+
+    this.eventEmitter.emit('property.counts.changed');
   }
 }
