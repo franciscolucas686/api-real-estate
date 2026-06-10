@@ -8,6 +8,7 @@ import { PropertiesService } from './properties.service';
 import { PropertyCleanupService } from './property-cleanup.service';
 import { PropertyImagesService } from './property-images.service';
 import { PropertyRoomsService } from './property-rooms.service';
+import { PropertyStatusCountsService } from './property-status-counts.service';
 import { PropertyStatusService } from './property-status.service';
 
 @Module({
@@ -19,6 +20,7 @@ import { PropertyStatusService } from './property-status.service';
     PropertyRoomsService,
     PropertyCleanupService,
     PropertyStatusService,
+    PropertyStatusCountsService,
   ],
   exports: [PropertiesService],
 })

@@ -10,10 +10,12 @@ import {
   Patch,
   Post,
   Query,
+  Sse,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Observable } from 'rxjs';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBody,
@@ -42,6 +44,7 @@ import {
 } from './dto';
 import { PropertyImagesService } from './property-images.service';
 import { PropertyRoomsService } from './property-rooms.service';
+import { PropertyStatusCountsService } from './property-status-counts.service';
 import { PropertiesService } from './properties.service';
 
 @ApiTags('Properties')
@@ -51,7 +54,17 @@ export class PropertiesController {
     private readonly propertiesService: PropertiesService,
     private readonly propertyImagesService: PropertyImagesService,
     private readonly propertyRoomsService: PropertyRoomsService,
+    private readonly propertyStatusCountsService: PropertyStatusCountsService,
   ) {}
+
+  @Sse('status-counts/stream')
+  @UseGuards(JwtGuard)
+  @ApiOperation({ summary: 'Stream de contadores de status em tempo real (SSE)' })
+  @ApiResponse({ status: 200, description: 'Stream SSE com contagem por status' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  streamStatusCounts(): Observable<MessageEvent> {
+    return this.propertyStatusCountsService.getStream();
+  }
 
   @Post()
   @HttpCode(201)

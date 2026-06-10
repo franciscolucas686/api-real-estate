@@ -98,6 +98,7 @@ export class PropertiesService {
     );
 
     this.eventEmitter.emit('property.saved', { neighborhoodId: property.neighborhoodId });
+    this.eventEmitter.emit('property.counts.changed');
 
     return property;
   }
@@ -730,10 +731,12 @@ export class PropertiesService {
     this.propertyStatusService.validateTransition(property.status, status);
 
     try {
-      return await this.prisma.property.update({
+      const updated = await this.prisma.property.update({
         where: { id },
         data: { status },
       });
+      this.eventEmitter.emit('property.counts.changed');
+      return updated;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         throw new PropertyNotFoundError(id);
@@ -755,6 +758,7 @@ export class PropertiesService {
 
     await this.propertyImagesService.deleteAllPropertyImagesFromR2(id);
     await this.prisma.property.delete({ where: { id } });
+    this.eventEmitter.emit('property.counts.changed');
   }
 
   async remove(id: string, userId: string) {
@@ -768,10 +772,12 @@ export class PropertiesService {
 
     await this.propertyImagesService.movePropertyImagesToDeleted(id);
 
-    return this.prisma.property.update({
+    const removed = await this.prisma.property.update({
       where: { id },
       data: { deletedAt: new Date() },
     });
+    this.eventEmitter.emit('property.counts.changed');
+    return removed;
   }
 
   async restore(id: string, userId: string): Promise<Property> {
@@ -793,10 +799,12 @@ export class PropertiesService {
 
     await this.propertyImagesService.restorePropertyImages(id);
 
-    return this.prisma.property.update({
+    const restored = await this.prisma.property.update({
       where: { id },
       data: { deletedAt: null },
     });
+    this.eventEmitter.emit('property.counts.changed');
+    return restored;
   }
 
   private buildWhereClause(filters: Partial<FilterPropertyDto>): Prisma.PropertyWhereInput {
