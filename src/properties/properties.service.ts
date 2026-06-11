@@ -810,7 +810,7 @@ export class PropertiesService {
   private buildWhereClause(filters: Partial<FilterPropertyDto>): Prisma.PropertyWhereInput {
     const where: Prisma.PropertyWhereInput = {
       deletedAt: null,
-      status: PropertyStatus.ACTIVE,
+      ...(filters.status ? { status: filters.status } : {}),
     };
 
     if (filters.types && filters.types.length > 0) {

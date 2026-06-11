@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { BusinessType, PropertyType, SaleType } from '@prisma/client';
+import { BusinessType, PropertyStatus, PropertyType, SaleType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
@@ -147,6 +147,15 @@ export class FilterPropertyDto {
   @IsNumber()
   @Min(0)
   maxParkingSpaces?: number;
+
+  @ApiPropertyOptional({
+    enum: PropertyStatus,
+    example: PropertyStatus.ACTIVE,
+    description: 'Filtrar por status do imóvel',
+  })
+  @IsOptional()
+  @IsEnum(PropertyStatus)
+  status?: PropertyStatus;
 
   @ApiPropertyOptional({
     enum: ['newest', 'oldest'],
