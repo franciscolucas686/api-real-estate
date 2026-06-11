@@ -66,6 +66,15 @@ export class PropertiesController {
     return this.propertyStatusCountsService.getStream();
   }
 
+  @Get('status-counts')
+  @UseGuards(JwtGuard)
+  @ApiOperation({ summary: 'Retorna contagem de imóveis por status' })
+  @ApiResponse({ status: 200, description: 'Contagem por status' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async getStatusCounts() {
+    return this.propertyStatusCountsService.getStatusCounts();
+  }
+
   @Post()
   @HttpCode(201)
   @UseGuards(JwtGuard)
