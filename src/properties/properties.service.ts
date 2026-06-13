@@ -12,7 +12,6 @@ import {
 import {
   InvalidBusinessTypeConfigError,
   InvalidSubtypeDataError,
-  PropertyForbiddenError,
   PropertyNotDeletedError,
   PropertyNotFoundError,
 } from '../common/errors';
@@ -749,15 +748,11 @@ export class PropertiesService {
     }
   }
 
-  async hardDelete(id: string, userId: string): Promise<void> {
+  async hardDelete(id: string): Promise<void> {
     const property = await this.prisma.property.findUnique({ where: { id } });
 
     if (!property) {
       throw new PropertyNotFoundError(id);
-    }
-
-    if (property.userId !== userId) {
-      throw new PropertyForbiddenError(id);
     }
 
     await this.propertyImagesService.deleteAllPropertyImagesFromR2(id);
@@ -784,7 +779,7 @@ export class PropertiesService {
     return removed;
   }
 
-  async restore(id: string, userId: string): Promise<Property> {
+  async restore(id: string): Promise<Property> {
     const property = await this.prisma.property.findUnique({
       where: { id },
     });
@@ -795,10 +790,6 @@ export class PropertiesService {
 
     if (!property.deletedAt) {
       throw new PropertyNotDeletedError(id);
-    }
-
-    if (property.userId !== userId) {
-      throw new PropertyForbiddenError(id);
     }
 
     await this.propertyImagesService.restorePropertyImages(id);

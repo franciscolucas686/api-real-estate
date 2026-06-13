@@ -153,11 +153,10 @@ export class PropertiesController {
   @ApiParam({ name: 'id', description: 'ID da propriedade' })
   @ApiResponse({ status: 200, description: 'Propriedade restaurada' })
   @ApiResponse({ status: 400, description: 'Propriedade não está deletada' })
-  @ApiResponse({ status: 403, description: 'Sem permissão' })
   @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async restore(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: CurrentUserDto) {
-    return this.propertiesService.restore(id, user.id);
+  async restore(@Param('id', ParseUUIDPipe) id: string) {
+    return this.propertiesService.restore(id);
   }
 
   @Patch(':id/status')
@@ -182,11 +181,10 @@ export class PropertiesController {
   @ApiOperation({ summary: 'Deletar permanentemente propriedade e todas as suas imagens do R2' })
   @ApiParam({ name: 'id', description: 'ID da propriedade' })
   @ApiResponse({ status: 204, description: 'Propriedade permanentemente deletada' })
-  @ApiResponse({ status: 403, description: 'Sem permissão' })
   @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async hardDelete(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: CurrentUserDto) {
-    await this.propertiesService.hardDelete(id, user.id);
+  async hardDelete(@Param('id', ParseUUIDPipe) id: string) {
+    await this.propertiesService.hardDelete(id);
   }
 
   @Post(':propertyId/images')
