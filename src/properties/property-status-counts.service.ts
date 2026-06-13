@@ -1,8 +1,5 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { Injectable } from '@nestjs/common';
 import { PropertyStatus } from '@prisma/client';
-import { Observable, Subject, from, merge } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type StatusCounts = Record<PropertyStatus, number>;
@@ -14,14 +11,8 @@ const DEFAULT_COUNTS: StatusCounts = {
 };
 
 @Injectable()
-export class PropertyStatusCountsService implements OnModuleDestroy {
-  private readonly changes$ = new Subject<void>();
-
+export class PropertyStatusCountsService {
   constructor(private readonly prisma: PrismaService) {}
-
-  onModuleDestroy() {
-    this.changes$.complete();
-  }
 
   async getStatusCounts(): Promise<StatusCounts> {
     const rows = await this.prisma.property.groupBy({
@@ -37,24 +28,5 @@ export class PropertyStatusCountsService implements OnModuleDestroy {
       },
       { ...DEFAULT_COUNTS },
     );
-  }
-
-  getStream(): Observable<MessageEvent> {
-    const initial$ = from(
-      this.getStatusCounts().then((counts) => ({ data: counts }) as MessageEvent),
-    );
-
-    const updates$ = this.changes$.pipe(
-      switchMap(() =>
-        from(this.getStatusCounts().then((counts) => ({ data: counts }) as MessageEvent)),
-      ),
-    );
-
-    return merge(initial$, updates$);
-  }
-
-  @OnEvent('property.counts.changed')
-  onCountsChanged() {
-    this.changes$.next();
   }
 }

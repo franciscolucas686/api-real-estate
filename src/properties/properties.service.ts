@@ -97,7 +97,6 @@ export class PropertiesService {
     );
 
     this.eventEmitter.emit('property.saved', { neighborhoodId: property.neighborhoodId });
-    this.eventEmitter.emit('property.counts.changed');
 
     return property;
   }
@@ -738,7 +737,6 @@ export class PropertiesService {
         where: { id },
         data: { status },
       });
-      this.eventEmitter.emit('property.counts.changed');
       return updated;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
@@ -757,7 +755,6 @@ export class PropertiesService {
 
     await this.propertyImagesService.deleteAllPropertyImagesFromR2(id);
     await this.prisma.property.delete({ where: { id } });
-    this.eventEmitter.emit('property.counts.changed');
   }
 
   async remove(id: string, userId: string) {
@@ -775,7 +772,6 @@ export class PropertiesService {
       where: { id },
       data: { deletedAt: new Date() },
     });
-    this.eventEmitter.emit('property.counts.changed');
     return removed;
   }
 
@@ -798,7 +794,6 @@ export class PropertiesService {
       where: { id },
       data: { deletedAt: null },
     });
-    this.eventEmitter.emit('property.counts.changed');
     return restored;
   }
 
