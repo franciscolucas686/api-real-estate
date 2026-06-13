@@ -11,13 +11,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { AdminSecretGuard } from '../auth/guards/admin-secret.guard';
+import { JwtGuard } from '../auth/guards/jwt.guard';
 import { CreateWhatsappNumberDto, UpdateWhatsappNumberDto } from './dto';
 import { WhatsappService } from './whatsapp.service';
 
 @ApiTags('whatsapp')
 @Controller('whatsapp-numbers')
-@UseGuards(AdminSecretGuard)
+@UseGuards(JwtGuard)
 export class WhatsappController {
   constructor(private readonly whatsappService: WhatsappService) {}
 
@@ -36,8 +36,8 @@ export class WhatsappController {
     description: 'Número inválido ou já existe',
   })
   @ApiResponse({
-    status: 403,
-    description: 'Acesso negado - requer admin secret',
+    status: 401,
+    description: 'Não autorizado',
   })
   create(@Body() createWhatsappNumberDto: CreateWhatsappNumberDto) {
     return this.whatsappService.create(createWhatsappNumberDto);
@@ -54,8 +54,8 @@ export class WhatsappController {
     description: 'Lista de números WhatsApp retornada com sucesso',
   })
   @ApiResponse({
-    status: 403,
-    description: 'Acesso negado - requer admin secret',
+    status: 401,
+    description: 'Não autorizado',
   })
   findAll() {
     return this.whatsappService.findAll();
@@ -72,8 +72,8 @@ export class WhatsappController {
     description: 'Número WhatsApp encontrado',
   })
   @ApiResponse({
-    status: 403,
-    description: 'Acesso negado - requer admin secret',
+    status: 401,
+    description: 'Não autorizado',
   })
   @ApiResponse({
     status: 404,
@@ -99,8 +99,8 @@ export class WhatsappController {
     description: 'Dados inválidos',
   })
   @ApiResponse({
-    status: 403,
-    description: 'Acesso negado - requer admin secret',
+    status: 401,
+    description: 'Não autorizado',
   })
   @ApiResponse({
     status: 404,
@@ -122,8 +122,8 @@ export class WhatsappController {
     description: 'Número WhatsApp deletado com sucesso',
   })
   @ApiResponse({
-    status: 403,
-    description: 'Acesso negado - requer admin secret',
+    status: 401,
+    description: 'Não autorizado',
   })
   @ApiResponse({
     status: 404,

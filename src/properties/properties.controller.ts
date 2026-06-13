@@ -29,6 +29,7 @@ import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUserDto } from '../auth/dto/current-user.dto';
 import { JwtGuard } from '../auth/guards/jwt.guard';
+import { OptionalJwtGuard } from '../auth/guards/optional-jwt.guard';
 import { CacheKey, CacheTTL, InvalidateCache } from '../common/decorators/cache.decorator';
 import {
   BulkDeletePropertyImagesDto,
@@ -101,14 +102,16 @@ export class PropertiesController {
 
   @Throttle({ default: { ttl: 60, limit: 120 } })
   @Get(':id')
-  @CacheTTL(600_000)
-  @CacheKey('properties-detail')
+  @UseGuards(OptionalJwtGuard)
   @ApiOperation({ summary: 'Obter detalhes de uma propriedade' })
   @ApiParam({ name: 'id', description: 'ID da propriedade' })
   @ApiResponse({ status: 200, description: 'Propriedade encontrada' })
-  @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.propertiesService.findOne(id);
+  @ApiResponse({ status: 404, description: 'Propriedade não encontrada ou não publicada' })
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: CurrentUserDto | undefined,
+  ) {
+    return this.propertiesService.findOne(id, !!user);
   }
 
   @Throttle({ default: { ttl: 3600, limit: 60 } })
@@ -150,11 +153,10 @@ export class PropertiesController {
   @ApiParam({ name: 'id', description: 'ID da propriedade' })
   @ApiResponse({ status: 200, description: 'Propriedade restaurada' })
   @ApiResponse({ status: 400, description: 'Propriedade não está deletada' })
-  @ApiResponse({ status: 403, description: 'Sem permissão' })
   @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async restore(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: CurrentUserDto) {
-    return this.propertiesService.restore(id, user.id);
+  async restore(@Param('id', ParseUUIDPipe) id: string) {
+    return this.propertiesService.restore(id);
   }
 
   @Patch(':id/status')
@@ -179,11 +181,10 @@ export class PropertiesController {
   @ApiOperation({ summary: 'Deletar permanentemente propriedade e todas as suas imagens do R2' })
   @ApiParam({ name: 'id', description: 'ID da propriedade' })
   @ApiResponse({ status: 204, description: 'Propriedade permanentemente deletada' })
-  @ApiResponse({ status: 403, description: 'Sem permissão' })
   @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async hardDelete(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: CurrentUserDto) {
-    await this.propertiesService.hardDelete(id, user.id);
+  async hardDelete(@Param('id', ParseUUIDPipe) id: string) {
+    await this.propertiesService.hardDelete(id);
   }
 
   @Post(':propertyId/images')
