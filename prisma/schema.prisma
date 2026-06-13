@@ -57,7 +57,7 @@ model Property {
   price          Decimal
   rentPrice      Decimal?
   condoFee       Decimal?
-  status         PropertyStatus     @default(DRAFT)
+  status         PropertyStatus     @default(PENDING)
   images         PropertyImage[]
   rooms          PropertyRoom[]
   saleTypes      PropertySaleType[]
@@ -191,7 +191,6 @@ model LocationCache {
 }
 
 enum PropertyStatus {
-  DRAFT
   PENDING
   ACTIVE
   INACTIVE

@@ -91,7 +91,7 @@ export class PropertyDetailDto {
 
   @ApiProperty({
     enum: PropertyStatus,
-    description: 'Status da propriedade (DRAFT, PENDING, ACTIVE, INACTIVE)',
+    description: 'Status da propriedade (PENDING, ACTIVE, INACTIVE)',
   })
   status!: PropertyStatus;
 
