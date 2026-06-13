@@ -14,7 +14,6 @@ import {
   ReorderPropertyImagesDto,
   UpdatePropertyImageDto,
 } from './dto';
-import { PropertyStatusService } from './property-status.service';
 
 @Injectable()
 export class PropertyImagesService {
@@ -23,7 +22,6 @@ export class PropertyImagesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly r2: R2Service,
-    private readonly propertyStatusService: PropertyStatusService,
   ) {}
 
   async uploadImages(
@@ -45,8 +43,6 @@ export class PropertyImagesService {
         this.processAndUploadImage(propertyId, file, startOrder + index, roomId),
       ),
     );
-
-    await this.propertyStatusService.applyAutoStatus(propertyId);
 
     return {
       images: uploadedImages,
@@ -143,13 +139,9 @@ export class PropertyImagesService {
 
     await this.deleteImagesFromR2([image]);
 
-    const deleted = await this.prisma.propertyImage.delete({
+    return this.prisma.propertyImage.delete({
       where: { id: imageId },
     });
-
-    await this.propertyStatusService.applyAutoStatus(image.propertyId);
-
-    return deleted;
   }
 
   async bulkDeleteImages(propertyId: string, dto: BulkDeletePropertyImagesDto): Promise<void> {
@@ -175,8 +167,6 @@ export class PropertyImagesService {
         error,
       );
     }
-
-    await this.propertyStatusService.applyAutoStatus(propertyId);
   }
 
   async deleteImagesFromR2(images: PropertyImage[]) {

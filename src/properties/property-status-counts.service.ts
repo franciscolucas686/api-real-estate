@@ -8,7 +8,6 @@ import { PrismaService } from '../prisma/prisma.service';
 export type StatusCounts = Record<PropertyStatus, number>;
 
 const DEFAULT_COUNTS: StatusCounts = {
-  [PropertyStatus.DRAFT]: 0,
   [PropertyStatus.PENDING]: 0,
   [PropertyStatus.ACTIVE]: 0,
   [PropertyStatus.INACTIVE]: 0,
