@@ -379,9 +379,13 @@ export class PropertiesService {
     };
   }
 
-  async findOne(id: string): Promise<PropertyDetailDto> {
+  async findOne(id: string, isAuthenticated = false): Promise<PropertyDetailDto> {
     const property = await this.prisma.property.findFirst({
-      where: { id, deletedAt: null, status: PropertyStatus.ACTIVE },
+      where: {
+        id,
+        deletedAt: null,
+        ...(isAuthenticated ? {} : { status: PropertyStatus.ACTIVE }),
+      },
       include: {
         images: {
           orderBy: { order: 'asc' },
