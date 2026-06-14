@@ -518,11 +518,18 @@ async function seedProperties(userId: string): Promise<void> {
 
     console.log(`         id: ${property.id}  code: ${property.code}`);
 
+    const isPending = def.status === PropertyStatus.PENDING;
+
     for (let ri = 0; ri < def.rooms.length; ri++) {
       const roomName = def.rooms[ri];
       const room = await prisma.propertyRoom.create({
         data: { propertyId: property.id, name: roomName, order: ri },
       });
+
+      if (isPending) {
+        console.log(`         Sala "${roomName}" – sem fotos (imóvel pendente)`);
+        continue;
+      }
 
       console.log(`         Sala "${roomName}" – 5 imagens`);
 
