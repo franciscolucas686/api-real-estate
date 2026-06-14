@@ -4,7 +4,7 @@ import { InvalidStatusTransitionError } from '../common/errors';
 
 const ALLOWED_TRANSITIONS: Partial<Record<PropertyStatus, PropertyStatus[]>> = {
   [PropertyStatus.PENDING]: [PropertyStatus.ACTIVE, PropertyStatus.INACTIVE],
-  [PropertyStatus.ACTIVE]: [PropertyStatus.INACTIVE],
+  [PropertyStatus.ACTIVE]: [PropertyStatus.INACTIVE, PropertyStatus.PENDING],
   [PropertyStatus.INACTIVE]: [PropertyStatus.PENDING],
 };
 
