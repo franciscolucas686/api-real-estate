@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PropertyImage } from '@prisma/client';
+import { PropertyImage, PropertyStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 import {
@@ -43,6 +43,8 @@ export class PropertyImagesService {
         this.processAndUploadImage(propertyId, file, startOrder + index, roomId),
       ),
     );
+
+    await this.syncPropertyStatus(propertyId);
 
     return {
       images: uploadedImages,
@@ -139,9 +141,13 @@ export class PropertyImagesService {
 
     await this.deleteImagesFromR2([image]);
 
-    return this.prisma.propertyImage.delete({
+    const deleted = await this.prisma.propertyImage.delete({
       where: { id: imageId },
     });
+
+    await this.syncPropertyStatus(image.propertyId);
+
+    return deleted;
   }
 
   async bulkDeleteImages(propertyId: string, dto: BulkDeletePropertyImagesDto): Promise<void> {
@@ -161,6 +167,7 @@ export class PropertyImagesService {
       await this.prisma.propertyImage.deleteMany({
         where: { id: { in: dto.imageIds } },
       });
+      await this.syncPropertyStatus(propertyId);
     } catch (error) {
       this.logger.error(
         `R2 deletado mas falha ao remover registros do banco para propertyId=${propertyId}:`,
@@ -271,6 +278,27 @@ export class PropertyImagesService {
     return this.prisma.propertyImage.create({
       data: { propertyId, url, order, ...(roomId && { roomId }) },
     });
+  }
+
+  private async syncPropertyStatus(propertyId: string): Promise<void> {
+    const [imageCount, property] = await Promise.all([
+      this.prisma.propertyImage.count({ where: { propertyId } }),
+      this.prisma.property.findUnique({ where: { id: propertyId }, select: { status: true } }),
+    ]);
+
+    if (!property) return;
+
+    if (property.status === PropertyStatus.PENDING && imageCount > 0) {
+      await this.prisma.property.update({
+        where: { id: propertyId },
+        data: { status: PropertyStatus.ACTIVE },
+      });
+    } else if (property.status === PropertyStatus.ACTIVE && imageCount === 0) {
+      await this.prisma.property.update({
+        where: { id: propertyId },
+        data: { status: PropertyStatus.PENDING },
+      });
+    }
   }
 
   private async deleteImageFromR2(image: PropertyImage): Promise<void> {
