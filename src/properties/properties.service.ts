@@ -723,19 +723,29 @@ export class PropertiesService {
   }
 
   async updateStatus(id: string, status: PropertyStatus): Promise<Property> {
-    const property = await this.prisma.property.findUnique({
-      where: { id },
-      select: { status: true },
-    });
+    const [property, imageCount] = await Promise.all([
+      this.prisma.property.findUnique({ where: { id }, select: { status: true } }),
+      status === PropertyStatus.ACTIVE
+        ? this.prisma.propertyImage.count({ where: { propertyId: id } })
+        : Promise.resolve(0),
+    ]);
 
     if (!property) throw new PropertyNotFoundError(id);
 
     this.propertyStatusService.validateTransition(property.status, status);
 
+    // When reactivating from INACTIVE, resolve target based on photo count
+    const resolvedStatus =
+      property.status === PropertyStatus.INACTIVE && status === PropertyStatus.ACTIVE
+        ? imageCount > 0
+          ? PropertyStatus.ACTIVE
+          : PropertyStatus.PENDING
+        : status;
+
     try {
       const updated = await this.prisma.property.update({
         where: { id },
-        data: { status },
+        data: { status: resolvedStatus },
       });
       return updated;
     } catch (error) {
