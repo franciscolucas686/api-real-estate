@@ -15,6 +15,7 @@ import { NeighborhoodsModule } from './neighborhoods/neighborhoods.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PropertiesModule } from './properties/properties.module';
 import { R2Module } from './r2/r2.module';
+import { SiteSettingsModule } from './site-settings/site-settings.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { UsersModule } from './users/users.module';
     GeocodingModule,
     NeighborhoodsModule,
     PropertiesModule,
+    SiteSettingsModule,
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: 60, limit: 100 }],

@@ -30,13 +30,20 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('API Real Estate')
     .setDescription(
-      'API para gerenciamento de propriedades imobiliárias com autenticação JWT, upload de imagens e filtros avançados',
+      'API para gerenciamento de propriedades imobiliárias com autenticação JWT, upload de imagens e filtros avançados.\n\n' +
+      '## Autenticação\n' +
+      'A maioria dos endpoints requer autenticação via cookie HTTP-only `accessToken` (obtido em `POST /api/auth/login`). ' +
+      'O token expira em 15 minutos e é renovado automaticamente via `POST /api/auth/refresh` usando o cookie `refreshToken` (7 dias).\n\n' +
+      '## Endpoints públicos\n' +
+      '`GET /api/site-settings` não requer autenticação.',
     )
     .setVersion('1.0')
-    .addCookieAuth('accessToken')
-    .addTag('Auth', 'Autenticação e autorização')
-    .addTag('Properties', 'Gerenciamento de propriedades')
-    .addTag('Health', 'Verificação de saúde')
+    .addCookieAuth('accessToken', { type: 'apiKey', in: 'cookie', name: 'accessToken' }, 'cookie')
+    .addTag('Auth', 'Autenticação e autorização (login, logout, refresh, perfil)')
+    .addTag('Properties', 'Gerenciamento de imóveis (CRUD, busca, filtros, status)')
+    .addTag('whatsapp', 'Pool de números WhatsApp distribuídos automaticamente entre imóveis')
+    .addTag('site-settings', 'Configurações globais do site (contato: WhatsApp, e-mail, telefone, horário)')
+    .addTag('Health', 'Verificação de saúde da API')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
