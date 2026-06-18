@@ -18,6 +18,15 @@ model User {
   properties            Property[]
 }
 
+model SiteSettings {
+  id        String   @id @default("singleton")
+  whatsapp  String   @default("")
+  email     String   @default("")
+  phone     String   @default("")
+  hours     String   @default("")
+  updatedAt DateTime @updatedAt
+}
+
 model WhatsappNumber {
   id        String   @id @default(uuid())
   number    String   @unique
