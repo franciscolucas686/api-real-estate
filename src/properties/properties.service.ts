@@ -77,7 +77,12 @@ export class PropertiesService {
     }
 
     this.validateSubtypeData(createPropertyDto);
-    this.validateBusinessTypeConfig(propertyData.businessType, saleTypes);
+    this.validateBusinessTypeConfig(
+      propertyData.businessType,
+      saleTypes,
+      propertyData.price,
+      propertyData.rentPrice,
+    );
     this.validateSuites(propertyData.suites, propertyData.bathrooms);
 
     const normalizedApartment = apartment ? this.normalizeApartmentFloor(apartment) : apartment;
@@ -240,7 +245,12 @@ export class PropertiesService {
     }
   }
 
-  private validateBusinessTypeConfig(businessType: BusinessType, saleTypes?: SaleType[]) {
+  private validateBusinessTypeConfig(
+    businessType: BusinessType,
+    saleTypes?: SaleType[],
+    price?: string,
+    rentPrice?: string,
+  ) {
     if (businessType === BusinessType.RENT && saleTypes && saleTypes.length > 0) {
       throw new InvalidBusinessTypeConfigError(
         'Propriedades de aluguel não podem ter tipos de venda',
@@ -250,6 +260,16 @@ export class PropertiesService {
     if (businessType === BusinessType.SALE && (!saleTypes || saleTypes.length === 0)) {
       throw new InvalidBusinessTypeConfigError(
         'Propriedades de venda devem ter pelo menos um tipo de venda',
+      );
+    }
+
+    if (businessType === BusinessType.SALE && !price) {
+      throw new InvalidBusinessTypeConfigError('Propriedades de venda devem ter um preço (price)');
+    }
+
+    if (businessType === BusinessType.RENT && !rentPrice) {
+      throw new InvalidBusinessTypeConfigError(
+        'Propriedades de aluguel devem ter um valor de aluguel (rentPrice)',
       );
     }
   }
@@ -357,7 +377,7 @@ export class PropertiesService {
         type: property.type,
         businessType: property.businessType,
         status: property.status,
-        price: property.price.toString(),
+        price: property.price?.toString() ?? null,
         rentPrice: property.rentPrice?.toString() ?? null,
         city: property.neighborhood.city,
         state: property.neighborhood.state,
@@ -485,7 +505,7 @@ export class PropertiesService {
       businessType: property.businessType,
       status: property.status,
       saleTypes: property.saleTypes.map((st) => ({ id: st.id, type: st.type })),
-      price: property.price.toString(),
+      price: property.price?.toString() ?? null,
       rentPrice: property.rentPrice?.toString() ?? null,
       condoFee: property.condoFee?.toString() ?? null,
       city: property.neighborhood.city,
@@ -563,6 +583,8 @@ export class PropertiesService {
 
     const hasSaleTypesUpdate = saleTypes !== undefined;
     const hasBusinessTypeUpdate = propertyData.businessType !== undefined;
+    const hasPriceOrRentPriceUpdate =
+      propertyData.price !== undefined || propertyData.rentPrice !== undefined;
     const hasSuitesOrBathroomsUpdate =
       propertyData.suites !== undefined || propertyData.bathrooms !== undefined;
     const hasLocationUpdate =
@@ -577,12 +599,17 @@ export class PropertiesService {
 
     // Only fetch current property if we need to validate business rules
     const needsValidation =
-      hasSaleTypesUpdate || hasBusinessTypeUpdate || hasSuitesOrBathroomsUpdate;
+      hasSaleTypesUpdate ||
+      hasBusinessTypeUpdate ||
+      hasPriceOrRentPriceUpdate ||
+      hasSuitesOrBathroomsUpdate;
     let currentProperty: {
       businessType: BusinessType;
       saleTypes: { type: SaleType }[];
       suites: number | null;
       bathrooms: number | null;
+      price: Prisma.Decimal | null;
+      rentPrice: Prisma.Decimal | null;
     } | null = null;
 
     if (needsValidation) {
@@ -593,6 +620,8 @@ export class PropertiesService {
           saleTypes: { select: { type: true } },
           suites: true,
           bathrooms: true,
+          price: true,
+          rentPrice: true,
         },
       });
 
@@ -602,7 +631,14 @@ export class PropertiesService {
 
       const newBusinessType = propertyData.businessType ?? currentProperty.businessType;
       const effectiveSaleTypes = saleTypes ?? currentProperty.saleTypes.map((st) => st.type);
-      this.validateBusinessTypeConfig(newBusinessType, effectiveSaleTypes);
+      const effectivePrice = propertyData.price ?? currentProperty.price?.toString();
+      const effectiveRentPrice = propertyData.rentPrice ?? currentProperty.rentPrice?.toString();
+      this.validateBusinessTypeConfig(
+        newBusinessType,
+        effectiveSaleTypes,
+        effectivePrice,
+        effectiveRentPrice,
+      );
 
       if (hasSuitesOrBathroomsUpdate) {
         const effectiveSuites = propertyData.suites ?? currentProperty.suites;
