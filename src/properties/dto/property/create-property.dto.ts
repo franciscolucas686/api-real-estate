@@ -35,16 +35,20 @@ export class CreatePropertyDto {
   @IsEnum(PropertyType, { message: 'Tipo de propriedade inválido' })
   type!: PropertyType;
 
-  @ApiProperty({ example: '750000.00', description: 'Preço de venda do imóvel' })
+  @ApiPropertyOptional({
+    example: '750000.00',
+    description: 'Preço de venda do imóvel (obrigatório quando businessType é SALE)',
+  })
+  @IsOptional()
   @IsString({ message: 'Preço deve ser uma string' })
   @Matches(/^\d+(\.\d{1,2})?$/, {
     message: 'Preço deve ser um número decimal válido (ex: 750000.00)',
   })
-  price!: string;
+  price?: string;
 
   @ApiPropertyOptional({
     example: '3500.00',
-    description: 'Preço de aluguel (quando aplicável)',
+    description: 'Preço de aluguel (obrigatório quando businessType é RENT)',
   })
   @IsOptional()
   @IsString({ message: 'Preço de aluguel deve ser uma string' })

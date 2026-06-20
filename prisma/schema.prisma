@@ -63,7 +63,7 @@ model Property {
   code           String             @unique
   businessType   BusinessType
   type           PropertyType
-  price          Decimal
+  price          Decimal?
   rentPrice      Decimal?
   condoFee       Decimal?
   status         PropertyStatus     @default(PENDING)

@@ -28,8 +28,8 @@ export class PropertyCardDto {
   })
   status!: PropertyStatus;
 
-  @ApiProperty({ type: String })
-  price!: string;
+  @ApiProperty({ type: String, nullable: true })
+  price!: string | null;
 
   @ApiProperty({ type: String, nullable: true })
   rentPrice!: string | null;
