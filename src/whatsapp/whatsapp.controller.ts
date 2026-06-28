@@ -10,7 +10,14 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiSecurity,
+  ApiTags,
+} from '@nestjs/swagger';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 import { CreateWhatsappNumberDto, UpdateWhatsappNumberDto } from './dto';
 import { WhatsappService } from './whatsapp.service';
@@ -66,7 +73,11 @@ export class WhatsappController {
     description: 'Número inválido (não numérico ou fora de 8–15 dígitos) ou já cadastrado',
     content: {
       'application/json': {
-        example: { statusCode: 400, message: ['Número deve conter apenas dígitos e ter entre 8 e 15 caracteres'], error: 'Bad Request' },
+        example: {
+          statusCode: 400,
+          message: ['Número deve conter apenas dígitos e ter entre 8 e 15 caracteres'],
+          error: 'Bad Request',
+        },
       },
     },
   })
@@ -78,7 +89,8 @@ export class WhatsappController {
   @Get()
   @ApiOperation({
     summary: 'Listar todos os números WhatsApp',
-    description: 'Retorna todos os números cadastrados, ordenados por `order` e depois por `createdAt`.',
+    description:
+      'Retorna todos os números cadastrados, ordenados por `order` e depois por `createdAt`.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -103,38 +115,17 @@ export class WhatsappController {
     return this.whatsappService.findAll();
   }
 
-  @Get(':id')
-  @ApiOperation({
-    summary: 'Obter número WhatsApp por ID',
-    description: 'Retorna os detalhes de um número WhatsApp específico pelo seu UUID.',
-  })
-  @ApiParam({ name: 'id', description: 'UUID do número WhatsApp', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Número encontrado',
-    content: { 'application/json': { example: WHATSAPP_NUMBER_EXAMPLE } },
-  })
-  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Não autenticado' })
-  @ApiResponse({
-    status: HttpStatus.NOT_FOUND,
-    description: 'Número não encontrado',
-    content: {
-      'application/json': {
-        example: { statusCode: 404, message: 'WhatsApp number with ID a1b2c3d4-... not found', error: 'Not Found' },
-      },
-    },
-  })
-  findOne(@Param('id') id: string) {
-    return this.whatsappService.findOne(id);
-  }
-
   @Patch(':id')
   @ApiOperation({
     summary: 'Atualizar número WhatsApp',
     description:
       'Atualiza parcialmente um número WhatsApp. Todos os campos são opcionais — envie apenas os que deseja alterar.',
   })
-  @ApiParam({ name: 'id', description: 'UUID do número WhatsApp', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID do número WhatsApp',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  })
   @ApiBody({
     type: UpdateWhatsappNumberDto,
     examples: {
@@ -157,7 +148,11 @@ export class WhatsappController {
     description: 'Número atualizado com sucesso',
     content: {
       'application/json': {
-        example: { ...WHATSAPP_NUMBER_EXAMPLE, isActive: false, updatedAt: '2026-06-18T05:00:00.000Z' },
+        example: {
+          ...WHATSAPP_NUMBER_EXAMPLE,
+          isActive: false,
+          updatedAt: '2026-06-18T05:00:00.000Z',
+        },
       },
     },
   })
@@ -175,8 +170,15 @@ export class WhatsappController {
       'Remove permanentemente um número do sistema. ' +
       'Imóveis que usavam esse número receberão automaticamente outro número ativo do pool na próxima requisição.',
   })
-  @ApiParam({ name: 'id', description: 'UUID do número WhatsApp', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
-  @ApiResponse({ status: HttpStatus.NO_CONTENT, description: 'Número removido com sucesso (sem corpo de resposta)' })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID do número WhatsApp',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  })
+  @ApiResponse({
+    status: HttpStatus.NO_CONTENT,
+    description: 'Número removido com sucesso (sem corpo de resposta)',
+  })
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Não autenticado' })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Número não encontrado' })
   async remove(@Param('id') id: string) {

@@ -11,7 +11,6 @@ import { CacheInterceptor } from './common/interceptors/cache.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AppConfigModule } from './config/config.module';
 import { GeocodingModule } from './geocoding';
-import { NeighborhoodsModule } from './neighborhoods/neighborhoods.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PropertiesModule } from './properties/properties.module';
 import { R2Module } from './r2/r2.module';
@@ -27,7 +26,6 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     R2Module,
     GeocodingModule,
-    NeighborhoodsModule,
     PropertiesModule,
     SiteSettingsModule,
     ScheduleModule.forRoot(),
