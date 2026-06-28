@@ -35,9 +35,7 @@ import {
   CreatePropertyRoomDto,
   FilterPropertyDto,
   ReorderPropertyImagesDto,
-  ReorderPropertyRoomsDto,
   UpdatePropertyDto,
-  UpdatePropertyImageDto,
   UpdatePropertyRoomDto,
   UpdatePropertyStatusDto,
 } from './dto';
@@ -162,20 +160,6 @@ export class PropertiesController {
     return this.propertiesService.updateStatus(id, dto.status);
   }
 
-  @Throttle({ default: { ttl: 60, limit: 10 } })
-  @Delete(':id/hard')
-  @HttpCode(204)
-  @UseGuards(JwtGuard)
-  @InvalidateCache('/properties')
-  @ApiOperation({ summary: 'Deletar permanentemente propriedade e todas as suas imagens do R2' })
-  @ApiParam({ name: 'id', description: 'ID da propriedade' })
-  @ApiResponse({ status: 204, description: 'Propriedade permanentemente deletada' })
-  @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async hardDelete(@Param('id', ParseUUIDPipe) id: string) {
-    await this.propertiesService.hardDelete(id);
-  }
-
   @Post(':propertyId/images')
   @HttpCode(201)
   @UseGuards(JwtGuard)
@@ -282,30 +266,6 @@ export class PropertiesController {
     return this.propertyRoomsService.createRoom(propertyId, dto);
   }
 
-  @Get(':propertyId/rooms')
-  @ApiOperation({ summary: 'Listar comodos da propriedade com imagens' })
-  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
-  @ApiResponse({ status: 200, description: 'Lista de comodos' })
-  async findRooms(@Param('propertyId', ParseUUIDPipe) propertyId: string) {
-    return this.propertyRoomsService.findRoomsByProperty(propertyId);
-  }
-
-  @Patch(':propertyId/rooms/reorder')
-  @UseGuards(JwtGuard)
-  @InvalidateCache('/properties')
-  @ApiOperation({ summary: 'Reordenar comodos' })
-  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
-  @ApiBody({ type: ReorderPropertyRoomsDto })
-  @ApiResponse({ status: 200, description: 'Comodos reordenados' })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async reorderRooms(
-    @Param('propertyId', ParseUUIDPipe) propertyId: string,
-    @Body() dto: ReorderPropertyRoomsDto,
-    @CurrentUser() user: CurrentUserDto,
-  ) {
-    return this.propertyRoomsService.reorderRooms(propertyId, dto);
-  }
-
   @Patch(':propertyId/rooms/:roomId')
   @UseGuards(JwtGuard)
   @InvalidateCache('/properties')
@@ -359,33 +319,5 @@ export class PropertiesController {
     @CurrentUser() user: CurrentUserDto,
   ) {
     return this.propertyImagesService.reorderImages(propertyId, dto);
-  }
-
-  @Patch(':propertyId/images/:imageId')
-  @UseGuards(JwtGuard)
-  @InvalidateCache('/properties')
-  @ApiOperation({ summary: 'Atualizar metadados da imagem' })
-  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
-  @ApiParam({ name: 'imageId', description: 'ID da imagem' })
-  @ApiBody({ type: UpdatePropertyImageDto })
-  @ApiResponse({ status: 200, description: 'Imagem atualizada' })
-  @ApiResponse({ status: 404, description: 'Imagem não encontrada' })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async updateImage(
-    @Param('propertyId', ParseUUIDPipe) propertyId: string,
-    @Param('imageId', ParseUUIDPipe) imageId: string,
-    @Body() dto: UpdatePropertyImageDto,
-    @CurrentUser() user: CurrentUserDto,
-  ) {
-    const { roomId, ...imageData } = dto;
-
-    if (roomId !== undefined) {
-      await this.propertyRoomsService.assignImagesToRoom(propertyId, {
-        imageIds: [imageId],
-        roomId,
-      });
-    }
-
-    return this.propertyImagesService.updateImage(propertyId, imageId, imageData);
   }
 }
