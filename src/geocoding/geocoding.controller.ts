@@ -38,9 +38,7 @@ export class GeocodingController {
       },
     },
   })
-  async geocodeForward(
-    @Body() dto: ForwardGeocodeDto,
-  ): Promise<ForwardGeocodeResponseDto | null> {
+  async geocodeForward(@Body() dto: ForwardGeocodeDto): Promise<ForwardGeocodeResponseDto | null> {
     return this.geocodingService.geocode(dto.neighborhood, dto.city, dto.state);
   }
 

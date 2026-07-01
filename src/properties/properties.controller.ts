@@ -76,7 +76,7 @@ export class PropertiesController {
     return this.propertiesService.create(createPropertyDto, user.id);
   }
 
-  @Throttle({ default: { ttl: 60, limit: 60 } })
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @Get()
   @CacheTTL(300_000)
   @CacheKey('properties-list')
@@ -87,7 +87,7 @@ export class PropertiesController {
     return this.propertiesService.findAll(filters);
   }
 
-  @Throttle({ default: { ttl: 60, limit: 120 } })
+  @Throttle({ default: { ttl: 60_000, limit: 120 } })
   @Get(':id')
   @UseGuards(OptionalJwtGuard)
   @ApiOperation({ summary: 'Obter detalhes de uma propriedade' })
@@ -101,7 +101,7 @@ export class PropertiesController {
     return this.propertiesService.findOne(id, !!user);
   }
 
-  @Throttle({ default: { ttl: 3600, limit: 60 } })
+  @Throttle({ default: { ttl: 3600_000, limit: 60 } })
   @Patch(':id')
   @UseGuards(JwtGuard)
   @InvalidateCache('/properties')
@@ -119,7 +119,7 @@ export class PropertiesController {
     return this.propertiesService.update(id, updatePropertyDto);
   }
 
-  @Throttle({ default: { ttl: 60, limit: 30 } })
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @Delete(':id')
   @HttpCode(204)
   @UseGuards(JwtGuard)
@@ -208,7 +208,7 @@ export class PropertiesController {
     return this.propertyImagesService.uploadImages(propertyId, files, roomId || undefined);
   }
 
-  @Throttle({ default: { ttl: 3600, limit: 30 } })
+  @Throttle({ default: { ttl: 3600_000, limit: 30 } })
   @Delete(':propertyId/images')
   @HttpCode(204)
   @UseGuards(JwtGuard)

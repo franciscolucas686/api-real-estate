@@ -30,7 +30,8 @@ import { UsersModule } from './users/users.module';
     SiteSettingsModule,
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
-      throttlers: [{ ttl: 60, limit: 100 }],
+      // ttl é em milissegundos no @nestjs/throttler v6+: 60_000ms = 100 requisições/60s
+      throttlers: [{ ttl: 60_000, limit: 100 }],
     }),
   ],
   controllers: [AppController],

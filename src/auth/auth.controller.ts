@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res, UseGuards } from '@nestjs/common';
 import { ApiBody, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { ConfigService } from '../config/config.service';
 import { AuthService } from './auth.service';
@@ -37,6 +38,7 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { ttl: 5 * 60 * 1000, limit: 5 } })
   @UseGuards(AdminSecretGuard)
   @ApiOperation({ summary: 'Registrar novo usuário' })
   @ApiHeader({
@@ -68,6 +70,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 5 * 60 * 1000, limit: 5 } })
   @ApiOperation({ summary: 'Fazer login' })
   @ApiBody({ type: LoginDto })
   @ApiResponse({
@@ -93,6 +96,7 @@ export class AuthController {
   @Post('refresh')
   @UseGuards(JwtRefreshGuard)
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 5 * 60 * 1000, limit: 10 } })
   @ApiOperation({ summary: 'Atualizar token de acesso' })
   @ApiResponse({
     status: HttpStatus.OK,
