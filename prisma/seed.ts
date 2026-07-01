@@ -661,6 +661,12 @@ async function seedLocationCache(): Promise<void> {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'Seed bloqueado: NODE_ENV=production. Este script apaga todo o banco e o bucket R2 e nunca deve rodar em produção.',
+    );
+  }
+
   console.log('🌱 Iniciando seed...\n');
 
   await cleanR2();
