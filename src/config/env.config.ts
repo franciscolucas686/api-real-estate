@@ -15,9 +15,9 @@ const envSchema = z
 
     CORS_ORIGIN: z.union([z.url(), z.literal('*')]).optional(),
 
-    JWT_SECRET: z.string().min(10, 'JWT_SECRET deve ter no mínimo 10 caracteres'),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET deve ter no mínimo 32 caracteres'),
 
-    JWT_REFRESH_SECRET: z.string().min(10, 'JWT_REFRESH_SECRET deve ter no mínimo 10 caracteres'),
+    JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET deve ter no mínimo 32 caracteres'),
 
     DATABASE_URL: z.url().optional(),
 
@@ -27,7 +27,7 @@ const envSchema = z
     R2_BUCKET_NAME: z.string().optional(),
     R2_PUBLIC_BASE_URL: z.string().url().optional(),
 
-    ADMIN_SECRET: z.string().min(10, 'ADMIN_SECRET deve ter no mínimo 10 caracteres'),
+    ADMIN_SECRET: z.string().min(32, 'ADMIN_SECRET deve ter no mínimo 32 caracteres'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
@@ -50,6 +50,15 @@ const envSchema = z
           });
         }
       });
+
+      if (env.CORS_ORIGIN === '*') {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            'CORS_ORIGIN="*" não é permitido em produção (incompatível com credentials: true)',
+          path: ['CORS_ORIGIN'],
+        });
+      }
     }
   });
 
