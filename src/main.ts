@@ -25,7 +25,7 @@ async function bootstrap() {
   app.use(helmet());
   app.use(cookieParser());
   app.enableCors({
-    origin: envConfig.CORS_ORIGIN === '*' ? true : envConfig.CORS_ORIGIN,
+    origin: envConfig.CORS_ORIGIN === '*' ? true : envConfig.CORS_ORIGIN?.replace(/\/$/, ''),
     credentials: true,
   });
 
