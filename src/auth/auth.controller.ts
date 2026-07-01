@@ -161,8 +161,13 @@ export class AuthController {
     const userId = user.id;
     await this.authService.logout(userId);
 
-    response.clearCookie('accessToken');
-    response.clearCookie('refreshToken');
+    const cookieOptions = {
+      httpOnly: true,
+      secure: this.configService.isProduction(),
+      sameSite: 'lax' as const,
+    };
+    response.clearCookie('accessToken', cookieOptions);
+    response.clearCookie('refreshToken', cookieOptions);
 
     return { message: 'Logout realizado com sucesso' };
   }
