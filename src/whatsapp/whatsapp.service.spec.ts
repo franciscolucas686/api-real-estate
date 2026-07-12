@@ -94,7 +94,7 @@ describe('WhatsappService', () => {
 
   describe('create', () => {
     it('deve criar um novo número de WhatsApp', async () => {
-      const dto = { number: '11987654321', label: 'Principal' };
+      const dto = { number: '11987654321' };
       const mockResult = {
         id: '1',
         ...dto,
@@ -120,7 +120,6 @@ describe('WhatsappService', () => {
           number: '11111111111',
           isActive: true,
           order: 0,
-          label: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -129,7 +128,6 @@ describe('WhatsappService', () => {
           number: '22222222222',
           isActive: false,
           order: 1,
-          label: 'Secundário',
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -152,7 +150,6 @@ describe('WhatsappService', () => {
         number: '11111111111',
         isActive: true,
         order: 0,
-        label: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -177,17 +174,16 @@ describe('WhatsappService', () => {
         number: '11111111111',
         isActive: true,
         order: 0,
-        label: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      const updateDto = { label: 'Atualizado' };
+      const updateDto = { order: 5 };
       prisma.whatsappNumber.findUnique.mockResolvedValue(mockNumber);
       prisma.whatsappNumber.update.mockResolvedValue({ ...mockNumber, ...updateDto });
 
       const result = await service.update('1', updateDto);
 
-      expect(result.label).toBe('Atualizado');
+      expect(result.order).toBe(5);
       expect(prisma.whatsappNumber.update).toHaveBeenCalledWith({
         where: { id: '1' },
         data: updateDto,
@@ -197,7 +193,7 @@ describe('WhatsappService', () => {
     it('deve lançar NotFoundException quando número não existe', async () => {
       prisma.whatsappNumber.findUnique.mockResolvedValue(null);
 
-      await expect(service.update('999', { label: 'Test' })).rejects.toThrow(NotFoundException);
+      await expect(service.update('999', { order: 1 })).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -208,7 +204,6 @@ describe('WhatsappService', () => {
         number: '11111111111',
         isActive: true,
         order: 0,
-        label: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };

@@ -30,7 +30,6 @@ model SiteSettings {
 model WhatsappNumber {
   id        String   @id @default(uuid())
   number    String   @unique
-  label     String?
   isActive  Boolean  @default(true)
   order     Int      @default(0)
   createdAt DateTime @default(now())
