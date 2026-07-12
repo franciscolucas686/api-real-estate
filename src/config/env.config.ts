@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { z } from 'zod';
 
 const envSchema = z
@@ -26,6 +25,7 @@ const envSchema = z
     R2_SECRET_ACCESS_KEY: z.string().optional(),
     R2_BUCKET_NAME: z.string().optional(),
     R2_PUBLIC_BASE_URL: z.string().url().optional(),
+    R2_ENDPOINT: z.string().url().optional(),
 
     ADMIN_SECRET: z.string().min(32, 'ADMIN_SECRET deve ter no mínimo 32 caracteres'),
   })
