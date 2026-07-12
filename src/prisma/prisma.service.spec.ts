@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { PrismaService } from './prisma.service';
+import { PRISMA_DATABASE_URL, PrismaService } from './prisma.service';
 
 jest.mock('@prisma/client', () => ({
   PrismaClient: class {
@@ -13,7 +13,7 @@ describe('PrismaService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [PrismaService],
+      providers: [PrismaService, { provide: PRISMA_DATABASE_URL, useValue: 'postgresql://test' }],
     }).compile();
 
     service = module.get<PrismaService>(PrismaService);
