@@ -14,14 +14,6 @@ export class CreateWhatsappNumberDto {
   number: string;
 
   @ApiPropertyOptional({
-    example: 'Atendimento Sul',
-    description: 'Rótulo identificador do número (para organização interna)',
-  })
-  @IsOptional()
-  @IsString()
-  label?: string;
-
-  @ApiPropertyOptional({
     example: true,
     description: 'Define se o número está ativo e será distribuído para imóveis',
     default: true,

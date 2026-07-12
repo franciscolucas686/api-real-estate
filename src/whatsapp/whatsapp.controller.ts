@@ -25,7 +25,6 @@ import { WhatsappService } from './whatsapp.service';
 const WHATSAPP_NUMBER_EXAMPLE = {
   id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   number: '11987654321',
-  label: 'Atendimento Sul',
   isActive: true,
   order: 0,
   createdAt: '2026-06-01T10:00:00.000Z',
@@ -50,8 +49,8 @@ export class WhatsappController {
     type: CreateWhatsappNumberDto,
     examples: {
       completo: {
-        summary: 'Com label e ordem',
-        value: { number: '11987654321', label: 'Atendimento Sul', isActive: true, order: 0 },
+        summary: 'Com status e ordem',
+        value: { number: '11987654321', isActive: true, order: 0 },
       },
       minimo: {
         summary: 'Apenas o número (mínimo obrigatório)',
@@ -103,7 +102,6 @@ export class WhatsappController {
             ...WHATSAPP_NUMBER_EXAMPLE,
             id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
             number: '11912345678',
-            label: 'Atendimento Norte',
             order: 1,
           },
         ],
@@ -136,10 +134,6 @@ export class WhatsappController {
       reordenar: {
         summary: 'Alterar ordem de exibição',
         value: { order: 2 },
-      },
-      atualizarLabel: {
-        summary: 'Renomear label',
-        value: { label: 'Atendimento Centro' },
       },
     },
   })
