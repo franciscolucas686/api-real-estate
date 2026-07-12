@@ -57,6 +57,10 @@ export class ConfigService {
     return this.envConfig.R2_PUBLIC_BASE_URL;
   }
 
+  get r2Endpoint(): string | undefined {
+    return this.envConfig.R2_ENDPOINT;
+  }
+
   get adminSecret(): string {
     return this.envConfig.ADMIN_SECRET;
   }

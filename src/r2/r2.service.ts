@@ -29,9 +29,11 @@ export class R2Service {
       this.bucketName = configService.r2BucketName!;
       this.publicBaseUrl = this.normalizeBaseUrl(configService.r2PublicBaseUrl!);
 
+      const r2Endpoint = configService.r2Endpoint;
       this.client = new S3Client({
         region: 'auto',
-        endpoint: `https://${configService.r2AccountId!}.r2.cloudflarestorage.com`,
+        endpoint: r2Endpoint ?? `https://${configService.r2AccountId!}.r2.cloudflarestorage.com`,
+        forcePathStyle: !!r2Endpoint,
         credentials: {
           accessKeyId: configService.r2AccessKeyId!,
           secretAccessKey: configService.r2SecretAccessKey!,

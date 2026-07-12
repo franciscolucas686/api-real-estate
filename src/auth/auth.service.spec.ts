@@ -1,6 +1,7 @@
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
+import * as bcrypt from 'bcryptjs';
+import { EmailAlreadyExistsError, InvalidCredentialsError } from '../common/errors';
 import { ConfigService } from '../config/config.service';
 import { UsersService } from '../users/users.service';
 import { AuthService } from './auth.service';
@@ -82,7 +83,7 @@ describe('AuthService', () => {
 
       mockUsersService.findByEmail.mockResolvedValue({ id: 'uuid', email: registerDto.email });
 
-      await expect(service.register(registerDto)).rejects.toThrow(BadRequestException);
+      await expect(service.register(registerDto)).rejects.toThrow(EmailAlreadyExistsError);
     });
   });
 
@@ -102,7 +103,11 @@ describe('AuthService', () => {
 
       mockJwtService.sign.mockReturnValue('token');
 
-      expect(mockUsersService.findByEmail).toBeDefined();
+      const result = await service.login(loginDto);
+
+      expect(result).toHaveProperty('accessToken');
+      expect(result.user).toHaveProperty('email', loginDto.email);
+      expect(mockUsersService.updateRefreshToken).toHaveBeenCalled();
     });
 
     it('deve lançar erro com email inválido', async () => {
@@ -113,7 +118,25 @@ describe('AuthService', () => {
 
       mockUsersService.findByEmail.mockResolvedValue(null);
 
-      await expect(service.login(loginDto)).rejects.toThrow(UnauthorizedException);
+      await expect(service.login(loginDto)).rejects.toThrow(InvalidCredentialsError);
+    });
+
+    it('deve lançar erro com senha inválida', async () => {
+      const loginDto = {
+        email: 'test@example.com',
+        password: 'WrongPassword',
+      };
+
+      mockUsersService.findByEmail.mockResolvedValue({
+        id: 'uuid',
+        email: loginDto.email,
+        password: '$2a$10$...',
+        name: 'Test User',
+      });
+
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
+
+      await expect(service.login(loginDto)).rejects.toThrow(InvalidCredentialsError);
     });
   });
 });
