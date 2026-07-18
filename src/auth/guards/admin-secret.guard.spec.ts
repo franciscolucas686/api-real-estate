@@ -1,5 +1,6 @@
-import { ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { ExecutionContext } from '@nestjs/common';
 import { AdminSecretGuard } from './admin-secret.guard';
+import { AdminSecretForbiddenError } from '../../common/errors';
 
 describe('AdminSecretGuard', () => {
   const mockConfigService = { adminSecret: 'super-secret-value' };
@@ -16,13 +17,13 @@ describe('AdminSecretGuard', () => {
     guard = new AdminSecretGuard(mockConfigService as never);
   });
 
-  it('lança ForbiddenException quando o header está ausente', () => {
-    expect(() => guard.canActivate(createContext({}))).toThrow(ForbiddenException);
+  it('lança AdminSecretForbiddenError quando o header está ausente', () => {
+    expect(() => guard.canActivate(createContext({}))).toThrow(AdminSecretForbiddenError);
   });
 
-  it('lança ForbiddenException quando o header tem valor errado', () => {
+  it('lança AdminSecretForbiddenError quando o header tem valor errado', () => {
     expect(() => guard.canActivate(createContext({ 'x-admin-secret': 'wrong-value' }))).toThrow(
-      ForbiddenException,
+      AdminSecretForbiddenError,
     );
   });
 

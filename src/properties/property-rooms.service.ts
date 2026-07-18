@@ -1,8 +1,9 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma, PropertyRoom } from '@prisma/client';
 import {
   ImageNotBelongToPropertyError,
   PropertyNotFoundError,
+  RoomNameAlreadyExistsError,
   RoomNotBelongToPropertyError,
   RoomNotFoundError,
 } from '../common/errors';
@@ -28,7 +29,7 @@ export class PropertyRoomsService {
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new ConflictException(`Já existe um cômodo com o nome "${dto.name}" neste imóvel`);
+        throw new RoomNameAlreadyExistsError(dto.name);
       }
       throw error;
     }
