@@ -56,8 +56,8 @@ describe('Auth (e2e)', () => {
       .expect(201);
 
     expect(res.body.user).toMatchObject({ email });
-    expect(extractCookie(res.get('set-cookie'), 'accessToken')).toContain('accessToken=');
-    expect(extractCookie(res.get('set-cookie'), 'refreshToken')).toContain('refreshToken=');
+    expect(extractCookie(res.get('Set-Cookie'), 'accessToken')).toContain('accessToken=');
+    expect(extractCookie(res.get('Set-Cookie'), 'refreshToken')).toContain('refreshToken=');
   });
 
   it('POST /api/auth/register com o mesmo email retorna 409', async () => {
@@ -88,8 +88,8 @@ describe('Auth (e2e)', () => {
       .send({ email, password })
       .expect(200);
 
-    const loginAccessCookie = extractCookie(loginRes.get('set-cookie'), 'accessToken');
-    const loginRefreshCookie = extractCookie(loginRes.get('set-cookie'), 'refreshToken');
+    const loginAccessCookie = extractCookie(loginRes.get('Set-Cookie'), 'accessToken');
+    const loginRefreshCookie = extractCookie(loginRes.get('Set-Cookie'), 'refreshToken');
 
     const meRes = await request(app.getHttpServer())
       .get('/api/auth/me')
@@ -106,7 +106,7 @@ describe('Auth (e2e)', () => {
     // (JWT com `iat` em segundos + payload igual => assinatura determinística).
     // O que importa aqui é que o endpoint aceita o refreshToken e emite um
     // accessToken válido, não necessariamente distinto byte-a-byte.
-    const refreshedAccessCookie = extractCookie(refreshRes.get('set-cookie'), 'accessToken');
+    const refreshedAccessCookie = extractCookie(refreshRes.get('Set-Cookie'), 'accessToken');
     expect(refreshedAccessCookie).toContain('accessToken=');
 
     await request(app.getHttpServer())
