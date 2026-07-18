@@ -1,12 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PropertyImage, PropertyStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import pLimit from 'p-limit';
 import sharp from 'sharp';
-import {
-  ImageNotBelongToPropertyError,
-  ImageNotFoundError,
-  PropertyNotFoundError,
-} from '../common/errors';
+import { ImageNotBelongToPropertyError, ImageNotFoundError } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../r2/r2.service';
 import {
@@ -15,9 +12,19 @@ import {
   UpdatePropertyImageDto,
 } from './dto';
 
+// Cada imagem só é processada uma vez (sem reaproveitamento), então o cache
+// interno do sharp não traz benefício e só consome memória; e com a
+// concorrência já controlada pelo limiter abaixo, deixar o libvips usar só
+// 1 thread por imagem evita disputa de CPU entre imagens processadas em paralelo.
+sharp.cache(false);
+sharp.concurrency(1);
+
+const IMAGE_PROCESSING_CONCURRENCY = 6;
+
 @Injectable()
 export class PropertyImagesService {
   private readonly logger = new Logger(PropertyImagesService.name);
+  private readonly limit = pLimit(IMAGE_PROCESSING_CONCURRENCY);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -38,17 +45,18 @@ export class PropertyImagesService {
     });
     const startOrder = (lastImage?.order ?? -1) + 1;
 
-    const uploadedImages = await Promise.all(
+    const images = await Promise.all(
       files.map((file, index) =>
-        this.processAndUploadImage(propertyId, file, startOrder + index, roomId),
+        this.limit(() => this.processImage(propertyId, file, startOrder + index, roomId)),
       ),
     );
 
-    await this.syncPropertyStatus(propertyId);
+    await this.prisma.propertyImage.createMany({ data: images });
+    await this.activatePropertyIfPending(propertyId);
 
     return {
-      images: uploadedImages,
-      total: uploadedImages.length,
+      images,
+      total: images.length,
     };
   }
 
@@ -131,14 +139,6 @@ export class PropertyImagesService {
       throw new ImageNotFoundError(imageId);
     }
 
-    const property = await this.prisma.property.findUnique({
-      where: { id: image.propertyId },
-    });
-
-    if (!property) {
-      throw new PropertyNotFoundError(image.propertyId);
-    }
-
     await this.deleteImagesFromR2([image]);
 
     const deleted = await this.prisma.propertyImage.delete({
@@ -215,20 +215,22 @@ export class PropertyImagesService {
     if (images.length === 0) return;
 
     await Promise.all(
-      images.map(async (image) => {
-        try {
-          const sourceKey = this.r2.getObjectKeyFromUrl(image.url);
-          const fileName = sourceKey.slice(sourceKey.indexOf('/') + 1);
-          const destKey = `deleted/${propertyId}/${fileName}`;
-          const newUrl = await this.r2.moveObject(sourceKey, destKey);
-          await this.prisma.propertyImage.update({
-            where: { id: image.id },
-            data: { url: newUrl },
-          });
-        } catch (error) {
-          this.logger.warn(`Erro ao mover imagem ${image.id} para deleted:`, error);
-        }
-      }),
+      images.map((image) =>
+        this.limit(async () => {
+          try {
+            const sourceKey = this.r2.getObjectKeyFromUrl(image.url);
+            const fileName = sourceKey.slice(sourceKey.indexOf('/') + 1);
+            const destKey = `deleted/${propertyId}/${fileName}`;
+            const newUrl = await this.r2.moveObject(sourceKey, destKey);
+            await this.prisma.propertyImage.update({
+              where: { id: image.id },
+              data: { url: newUrl },
+            });
+          } catch (error) {
+            this.logger.warn(`Erro ao mover imagem ${image.id} para deleted:`, error);
+          }
+        }),
+      ),
     );
   }
 
@@ -240,24 +242,31 @@ export class PropertyImagesService {
     if (images.length === 0) return;
 
     await Promise.all(
-      images.map(async (image) => {
-        try {
-          const sourceKey = this.r2.getObjectKeyFromUrl(image.url);
-          const fileName = sourceKey.slice(sourceKey.lastIndexOf('/') + 1);
-          const destKey = `${propertyId}/${fileName}`;
-          const newUrl = await this.r2.moveObject(sourceKey, destKey);
-          await this.prisma.propertyImage.update({
-            where: { id: image.id },
-            data: { url: newUrl },
-          });
-        } catch (error) {
-          this.logger.warn(`Erro ao restaurar imagem ${image.id}:`, error);
-        }
-      }),
+      images.map((image) =>
+        this.limit(async () => {
+          try {
+            const sourceKey = this.r2.getObjectKeyFromUrl(image.url);
+            const fileName = sourceKey.slice(sourceKey.lastIndexOf('/') + 1);
+            const destKey = `${propertyId}/${fileName}`;
+            const newUrl = await this.r2.moveObject(sourceKey, destKey);
+            await this.prisma.propertyImage.update({
+              where: { id: image.id },
+              data: { url: newUrl },
+            });
+          } catch (error) {
+            this.logger.warn(`Erro ao restaurar imagem ${image.id}:`, error);
+          }
+        }),
+      ),
     );
   }
 
-  private async processAndUploadImage(
+  // Compressão sempre gera um buffer (nunca stream): o SDK do R2 só evita um PUT
+  // de tamanho desconhecido usando multipart upload (@aws-sdk/lib-storage), e o
+  // tamanho mínimo de uma parte multipart é 5MB — bem acima do que uma foto
+  // comprimida (1920x1080, JPEG 80%) costuma pesar. Streamar aqui adicionaria uma
+  // dependência e complexidade sem reduzir o pico de memória real.
+  private async processImage(
     propertyId: string,
     file: Express.Multer.File,
     order: number,
@@ -272,12 +281,35 @@ export class PropertyImagesService {
       .jpeg({ quality: 80 })
       .toBuffer();
 
-    const key = `${propertyId}/${Date.now()}-${randomUUID()}.jpg`;
+    const key = `${propertyId}/${randomUUID()}.jpg`;
     const url = await this.r2.uploadImage(compressedBuffer, key, 'image/jpeg');
 
-    return this.prisma.propertyImage.create({
-      data: { propertyId, url, order, ...(roomId && { roomId }) },
+    return {
+      id: randomUUID(),
+      propertyId,
+      roomId: roomId ?? null,
+      url,
+      label: null,
+      order,
+      createdAt: new Date(),
+    };
+  }
+
+  // Caminho de upload não precisa da checagem bidirecional de syncPropertyStatus:
+  // como acabamos de inserir pelo menos 1 imagem, a contagem já é > 0 por
+  // construção — só falta virar ACTIVE se ainda estava PENDING.
+  private async activatePropertyIfPending(propertyId: string): Promise<void> {
+    const property = await this.prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { status: true },
     });
+
+    if (property?.status === PropertyStatus.PENDING) {
+      await this.prisma.property.update({
+        where: { id: propertyId },
+        data: { status: PropertyStatus.ACTIVE },
+      });
+    }
   }
 
   private async syncPropertyStatus(propertyId: string): Promise<void> {
