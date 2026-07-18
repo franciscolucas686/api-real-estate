@@ -1,10 +1,11 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { validateEnvConfig } from './config/env.config';
+import { createAppValidationPipe } from './common/pipes/app-validation.pipe';
 
 const logger = new Logger('NestApplication');
 
@@ -16,13 +17,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
-    }),
-  );
+  app.useGlobalPipes(createAppValidationPipe());
   app.use(helmet());
   app.use(cookieParser());
   app.enableCors({

@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { GeocodingInvalidAddressError, GeocodingServiceError } from '../common/errors';
 
 type Coordinates = { latitude: number; longitude: number };
 
@@ -93,13 +94,13 @@ export class GeocodingService {
       });
 
       if (!response.ok) {
-        throw new InternalServerErrorException('Erro ao consultar serviço de geocoding');
+        throw new GeocodingServiceError('Erro ao consultar serviço de geocoding');
       }
 
       const data: NominatimReverseResponse = await response.json();
 
       if (!data.address) {
-        throw new BadRequestException(
+        throw new GeocodingInvalidAddressError(
           'Não foi possível identificar o endereço para as coordenadas fornecidas',
         );
       }
@@ -109,7 +110,7 @@ export class GeocodingService {
       const state = this.extractState(data.address);
 
       if (!neighborhood || !city || !state) {
-        throw new BadRequestException(
+        throw new GeocodingInvalidAddressError(
           'Coordenadas fornecidas não retornaram dados completos de localização',
         );
       }
@@ -122,11 +123,11 @@ export class GeocodingService {
         longitude,
       };
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+      if (error instanceof GeocodingInvalidAddressError || error instanceof GeocodingServiceError) {
         throw error;
       }
 
-      throw new InternalServerErrorException('Erro inesperado ao processar geocoding');
+      throw new GeocodingServiceError('Erro inesperado ao processar geocoding');
     }
   }
 

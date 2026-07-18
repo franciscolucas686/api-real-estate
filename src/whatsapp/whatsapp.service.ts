@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { WhatsappNumber } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateWhatsappNumberDto, UpdateWhatsappNumberDto } from './dto';
+import { WhatsappNumberNotFoundError } from '../common/errors';
 
 @Injectable()
 export class WhatsappService {
@@ -47,7 +48,7 @@ export class WhatsappService {
     });
 
     if (!whatsappNumber) {
-      throw new NotFoundException(`WhatsApp number with ID ${id} not found`);
+      throw new WhatsappNumberNotFoundError(id);
     }
 
     return whatsappNumber;

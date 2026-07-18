@@ -1,9 +1,14 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Request } from 'express';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '../../config/config.service';
 import { UsersService } from '../../users/users.service';
+import {
+  RefreshTokenExpiredError,
+  RefreshTokenMismatchError,
+  RefreshTokenMissingError,
+} from '../../common/errors';
 
 export interface JwtRefreshPayload {
   sub: string;
@@ -32,15 +37,15 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     const user = await this.usersService.findById(payload.sub);
 
     if (!user || !user.refreshToken) {
-      throw new UnauthorizedException('Refresh token inválido');
+      throw new RefreshTokenMissingError();
     }
 
     if (user.refreshToken !== token) {
-      throw new UnauthorizedException('Refresh token não corresponde');
+      throw new RefreshTokenMismatchError();
     }
 
     if (user.refreshTokenExpiresAt && user.refreshTokenExpiresAt < new Date()) {
-      throw new UnauthorizedException('Refresh token expirado');
+      throw new RefreshTokenExpiredError();
     }
 
     return { id: payload.sub };

@@ -13,15 +13,17 @@ interface HttpExceptionResponseBody {
   statusCode?: number;
   message: string | string[];
   error?: string;
+  code?: string;
 }
 
 interface ErrorResponse {
   statusCode: number;
+  code: string;
   timestamp: string;
   path: string;
   method: string;
   message: string | string[];
-  error?: string;
+  error: string;
 }
 
 @Catch()
@@ -33,7 +35,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const { status, message, errorType } = this.resolveException(exception, request);
+    const { status, message, errorType, code } = this.resolveException(exception, request);
 
     if (status >= 400 && status < 500) {
       this.logger.warn(
@@ -43,15 +45,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const errorResponse: ErrorResponse = {
       statusCode: status,
+      code,
       timestamp: new Date().toISOString(),
       path: request.path,
       method: request.method,
       message,
+      error: errorType,
     };
-
-    if (status >= 500) {
-      errorResponse.error = errorType;
-    }
 
     response.status(status).json(errorResponse);
   }
@@ -59,12 +59,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
   private resolveException(
     exception: DomainError | HttpException | Error | unknown,
     request: Request,
-  ): { status: number; message: string | string[]; errorType: string } {
+  ): { status: number; message: string | string[]; errorType: string; code: string } {
     if (exception instanceof DomainError) {
       return {
         status: exception.statusCode,
         message: exception.message,
         errorType: exception.name,
+        code: exception.code,
       };
     }
 
@@ -76,12 +77,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
           status: exception.getStatus(),
           message: responseObj.message || 'Erro na requisição',
           errorType: responseObj.error || exception.name,
+          code: responseObj.code || 'HTTP_EXCEPTION',
         };
       }
       return {
         status: exception.getStatus(),
         message: exceptionResponse as string,
         errorType: exception.name,
+        code: 'HTTP_EXCEPTION',
       };
     }
 
@@ -103,6 +106,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Erro interno do servidor',
       errorType: 'InternalServerError',
+      code: 'INTERNAL_ERROR',
     };
   }
 }

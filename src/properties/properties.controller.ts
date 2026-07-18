@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -29,6 +28,7 @@ import { CurrentUserDto } from '../auth/dto/current-user.dto';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 import { OptionalJwtGuard } from '../auth/guards/optional-jwt.guard';
 import { CacheKey, CacheTTL, InvalidateCache } from '../common/decorators/cache.decorator';
+import { PropertyImageFileMissingError } from '../common/errors';
 import {
   BulkDeletePropertyImagesDto,
   CreatePropertyDto,
@@ -202,7 +202,7 @@ export class PropertiesController {
     @CurrentUser() user: CurrentUserDto,
   ) {
     if (!files?.length) {
-      throw new BadRequestException('Nenhuma imagem foi enviada');
+      throw new PropertyImageFileMissingError();
     }
 
     return this.propertyImagesService.uploadImages(propertyId, files, roomId || undefined);

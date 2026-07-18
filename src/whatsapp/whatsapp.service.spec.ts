@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from './whatsapp.service';
+import { WhatsappNumberNotFoundError } from '../common/errors';
 
 const mockPrismaService = {
   whatsappNumber: {
@@ -160,10 +160,10 @@ describe('WhatsappService', () => {
       expect(result).toEqual(mockNumber);
     });
 
-    it('deve lançar NotFoundException quando número não existe', async () => {
+    it('deve lançar WhatsappNumberNotFoundError quando número não existe', async () => {
       prisma.whatsappNumber.findUnique.mockResolvedValue(null);
 
-      await expect(service.findOne('999')).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('999')).rejects.toThrow(WhatsappNumberNotFoundError);
     });
   });
 
@@ -190,10 +190,12 @@ describe('WhatsappService', () => {
       });
     });
 
-    it('deve lançar NotFoundException quando número não existe', async () => {
+    it('deve lançar WhatsappNumberNotFoundError quando número não existe', async () => {
       prisma.whatsappNumber.findUnique.mockResolvedValue(null);
 
-      await expect(service.update('999', { order: 1 })).rejects.toThrow(NotFoundException);
+      await expect(service.update('999', { order: 1 })).rejects.toThrow(
+        WhatsappNumberNotFoundError,
+      );
     });
   });
 
@@ -215,10 +217,10 @@ describe('WhatsappService', () => {
       expect(prisma.whatsappNumber.delete).toHaveBeenCalledWith({ where: { id: '1' } });
     });
 
-    it('deve lançar NotFoundException quando número não existe', async () => {
+    it('deve lançar WhatsappNumberNotFoundError quando número não existe', async () => {
       prisma.whatsappNumber.findUnique.mockResolvedValue(null);
 
-      await expect(service.remove('999')).rejects.toThrow(NotFoundException);
+      await expect(service.remove('999')).rejects.toThrow(WhatsappNumberNotFoundError);
     });
   });
 });
