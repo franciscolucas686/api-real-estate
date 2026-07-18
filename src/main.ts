@@ -12,6 +12,7 @@ async function bootstrap() {
   const envConfig = validateEnvConfig();
 
   const app = await NestFactory.create(AppModule);
+  app.enableShutdownHooks();
 
   app.setGlobalPrefix('api');
 
