@@ -25,3 +25,4 @@ export {
 export { StorageNotConfiguredError } from './storage.errors';
 export { WhatsappNumberNotFoundError } from './whatsapp.errors';
 export { GeocodingInvalidAddressError, GeocodingServiceError } from './geocoding.errors';
+export { TooManyRequestsError } from './rate-limit.errors';
