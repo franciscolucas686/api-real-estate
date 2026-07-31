@@ -56,6 +56,10 @@ export class CacheInterceptor implements NestInterceptor, OnModuleDestroy {
       return next.handle();
     }
 
+    if (request.query.nocache) {
+      return next.handle();
+    }
+
     const customKey = this.reflector.get<string>(CACHE_KEY_META, handler);
     const cacheKey = customKey
       ? this.generateKeyFromPrefix(customKey, request)
@@ -103,23 +107,37 @@ export class CacheInterceptor implements NestInterceptor, OnModuleDestroy {
   }
 
   private generateKeyFromPrefix(prefix: string, request: Request): string {
-    const queryString = Object.keys(request.query)
-      .filter((key) => key !== 'nocache')
-      .sort()
-      .map((key) => `${key}=${request.query[key]}`)
-      .join('&');
-
-    return `${prefix}:${request.path}${queryString ? `?${queryString}` : ''}`;
+    return `${prefix}:${this.requestSignature(request)}`;
   }
 
   private generateCacheKey(request: Request): string {
+    return `${request.method}:${this.requestSignature(request)}`;
+  }
+
+  /**
+   * Path + sorted query string + auth scope.
+   *
+   * The auth segment is not optional: routes behind `OptionalJwtGuard` return
+   * different data for the same URL depending on whether a valid session cookie was
+   * sent (e.g. `GET /properties` hides non-ACTIVE inventory from anonymous callers).
+   * Without it, the first authenticated request would populate the cache and every
+   * anonymous caller would be served that response for the rest of the TTL.
+   *
+   * Guards run before interceptors in Nest's request lifecycle, so `request.user` is
+   * already populated here. Scope is the *fact* of authentication, not the user id —
+   * this API is deliberately not data-isolated per user (see ARCHITECTURE.md), so a
+   * per-user key would only fragment the cache without changing the response.
+   */
+  private requestSignature(request: Request): string {
     const queryString = Object.keys(request.query)
       .filter((key) => key !== 'nocache')
       .sort()
-      .map((key) => `${key}=${request.query[key]}`)
+      .map((key) => `${key}=${String(request.query[key])}`)
       .join('&');
 
-    return `${request.method}:${request.path}${queryString ? `?${queryString}` : ''}`;
+    const scope = request.user ? 'auth' : 'anon';
+
+    return `${scope}:${request.path}${queryString ? `?${queryString}` : ''}`;
   }
 
   private evictIfNeeded(): void {

@@ -336,14 +336,20 @@ export class PropertiesService {
     return apartment as CreateApartmentDto & { floor: number };
   }
 
-  async findAll(filters: FilterPropertyDto = {}): Promise<PropertyListResponseDto> {
-    return this.findWithFilters(filters);
+  async findAll(
+    filters: FilterPropertyDto = {},
+    isAuthenticated = false,
+  ): Promise<PropertyListResponseDto> {
+    return this.findWithFilters(filters, isAuthenticated);
   }
 
-  async findWithFilters(filters: FilterPropertyDto): Promise<PropertyListResponseDto> {
+  async findWithFilters(
+    filters: FilterPropertyDto,
+    isAuthenticated = false,
+  ): Promise<PropertyListResponseDto> {
     const { skip = 0, take = 10, sort = 'newest', ...filterParams } = filters;
 
-    const where = this.buildWhereClause(filterParams);
+    const where = this.buildWhereClause(filterParams, isAuthenticated);
     const orderBy: Prisma.PropertyOrderByWithRelationInput = {
       createdAt: sort === 'newest' ? 'desc' : 'asc',
     };
@@ -910,10 +916,23 @@ export class PropertiesService {
     return restored;
   }
 
-  private buildWhereClause(filters: Partial<FilterPropertyDto>): Prisma.PropertyWhereInput {
+  private buildWhereClause(
+    filters: Partial<FilterPropertyDto>,
+    isAuthenticated = false,
+  ): Prisma.PropertyWhereInput {
+    // Anonymous callers are pinned to ACTIVE and cannot widen it via ?status=, which
+    // would otherwise expose PENDING/INACTIVE inventory to anyone hitting the public
+    // list endpoint. Authenticated callers keep the full filter, including "all
+    // statuses" when ?status= is omitted. Mirrors findOne()'s auth-aware filtering.
+    const statusFilter = isAuthenticated
+      ? filters.status
+        ? { status: filters.status }
+        : {}
+      : { status: PropertyStatus.ACTIVE };
+
     const where: Prisma.PropertyWhereInput = {
       deletedAt: null,
-      ...(filters.status ? { status: filters.status } : {}),
+      ...statusFilter,
     };
 
     if (filters.types && filters.types.length > 0) {

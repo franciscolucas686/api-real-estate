@@ -40,6 +40,8 @@ describe('PropertiesService', () => {
     property: {
       create: jest.fn(),
       findUnique: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
       update: jest.fn(),
     },
     propertyImage: {
@@ -314,6 +316,59 @@ describe('PropertiesService', () => {
         where: { id: 'prop-1' },
         data: { status: PropertyStatus.ACTIVE },
       });
+    });
+  });
+
+  describe('findAll — filtragem de status por autenticação', () => {
+    function whereUsed(): Record<string, unknown> {
+      const call = mockPrismaService.property.findMany.mock.calls[0] as [
+        { where: Record<string, unknown> },
+      ];
+      return call[0].where;
+    }
+
+    beforeEach(() => {
+      mockPrismaService.property.findMany.mockResolvedValue([]);
+      mockPrismaService.property.count.mockResolvedValue(0);
+    });
+
+    it('chamada anônima sem ?status= é fixada em ACTIVE', async () => {
+      await service.findAll({});
+
+      expect(whereUsed()).toMatchObject({ deletedAt: null, status: PropertyStatus.ACTIVE });
+    });
+
+    it('chamada anônima não consegue ampliar o escopo via ?status=PENDING', async () => {
+      await service.findAll({ status: PropertyStatus.PENDING });
+
+      // O filtro pedido é descartado: inventário não publicado não pode vazar
+      // pelo endpoint público de listagem.
+      expect(whereUsed()).toMatchObject({ status: PropertyStatus.ACTIVE });
+    });
+
+    it('chamada anônima não consegue ampliar o escopo via ?status=INACTIVE', async () => {
+      await service.findAll({ status: PropertyStatus.INACTIVE });
+
+      expect(whereUsed()).toMatchObject({ status: PropertyStatus.ACTIVE });
+    });
+
+    it('chamada autenticada sem ?status= enxerga todos os status', async () => {
+      await service.findAll({}, true);
+
+      expect(whereUsed()).toEqual({ deletedAt: null });
+      expect(whereUsed()).not.toHaveProperty('status');
+    });
+
+    it('chamada autenticada com ?status=PENDING usa o status pedido', async () => {
+      await service.findAll({ status: PropertyStatus.PENDING }, true);
+
+      expect(whereUsed()).toMatchObject({ status: PropertyStatus.PENDING });
+    });
+
+    it('soft delete continua excluído em qualquer escopo', async () => {
+      await service.findAll({}, true);
+
+      expect(whereUsed()).toMatchObject({ deletedAt: null });
     });
   });
 });
