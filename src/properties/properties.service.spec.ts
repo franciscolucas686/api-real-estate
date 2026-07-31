@@ -365,6 +365,53 @@ describe('PropertiesService', () => {
       expect(whereUsed()).toMatchObject({ status: PropertyStatus.PENDING });
     });
 
+    it('ordena por preço com nulos no fim — imóvel só de aluguel não é "o mais barato"', async () => {
+      await service.findAll({ sort: 'price_asc' });
+
+      const call = mockPrismaService.property.findMany.mock.calls[0] as [{ orderBy: unknown }];
+      expect(call[0].orderBy).toEqual({ price: { sort: 'asc', nulls: 'last' } });
+    });
+
+    it('ordena por área total decrescente', async () => {
+      await service.findAll({ sort: 'area_desc' });
+
+      const call = mockPrismaService.property.findMany.mock.calls[0] as [{ orderBy: unknown }];
+      expect(call[0].orderBy).toEqual({ totalArea: { sort: 'desc', nulls: 'last' } });
+    });
+
+    it('sem sort cai em createdAt desc', async () => {
+      await service.findAll({});
+
+      const call = mockPrismaService.property.findMany.mock.calls[0] as [{ orderBy: unknown }];
+      expect(call[0].orderBy).toEqual({ createdAt: 'desc' });
+    });
+
+    it('a busca textual cruza código e localização num OR', async () => {
+      await service.findAll({ q: 'campolim' });
+
+      const and = whereUsed().AND as { OR: unknown[] }[];
+      expect(and).toHaveLength(1);
+      expect(and[0].OR).toHaveLength(4);
+    });
+
+    it('a busca textual combina com um filtro explícito em vez de sobrescrevê-lo', async () => {
+      // `q` mora num AND próprio justamente para isso: se fosse mesclado em
+      // `where.neighborhood`, o filtro de cidade seria descartado.
+      await service.findAll({ q: 'centro', city: 'Sorocaba' });
+
+      const where = whereUsed();
+      expect(where.neighborhood).toMatchObject({
+        city: { contains: 'Sorocaba', mode: 'insensitive' },
+      });
+      expect(where.AND).toBeDefined();
+    });
+
+    it('q vazio ou só espaços não gera cláusula', async () => {
+      await service.findAll({ q: '   ' });
+
+      expect(whereUsed().AND).toBeUndefined();
+    });
+
     it('soft delete continua excluído em qualquer escopo', async () => {
       await service.findAll({}, true);
 

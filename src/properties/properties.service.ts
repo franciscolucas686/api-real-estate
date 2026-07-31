@@ -37,6 +37,34 @@ import { PropertyImagesService } from './property-images.service';
 
 const PREVIEW_LIMIT_ROOMS = 4;
 
+/**
+ * Maps a `sort` value onto Prisma's `orderBy`.
+ *
+ * Only `createdAt` was supported, which meant a property portal with no "menor preço" — and
+ * the frontend cannot compensate, since it receives one page at a time, not the whole set.
+ *
+ * `nulls: 'last'` on price is load-bearing: `price` is null on rent-only properties (their
+ * amount lives in `rentPrice`), so ascending order would otherwise open with every rental
+ * listed as if it were the cheapest thing for sale. Ordering by `COALESCE(price, rentPrice)`
+ * would be more correct still, but needs a generated column or raw SQL — deliberately not
+ * done here, and the trade-off is documented rather than hidden.
+ */
+function buildOrderBy(sort: FilterPropertyDto['sort']): Prisma.PropertyOrderByWithRelationInput {
+  switch (sort) {
+    case 'oldest':
+      return { createdAt: 'asc' };
+    case 'price_asc':
+      return { price: { sort: 'asc', nulls: 'last' } };
+    case 'price_desc':
+      return { price: { sort: 'desc', nulls: 'last' } };
+    case 'area_desc':
+      return { totalArea: { sort: 'desc', nulls: 'last' } };
+    case 'newest':
+    default:
+      return { createdAt: 'desc' };
+  }
+}
+
 @Injectable()
 export class PropertiesService {
   constructor(
@@ -350,9 +378,7 @@ export class PropertiesService {
     const { skip = 0, take = 10, sort = 'newest', ...filterParams } = filters;
 
     const where = this.buildWhereClause(filterParams, isAuthenticated);
-    const orderBy: Prisma.PropertyOrderByWithRelationInput = {
-      createdAt: sort === 'newest' ? 'desc' : 'asc',
-    };
+    const orderBy = buildOrderBy(sort);
 
     const [properties, total] = await Promise.all([
       this.prisma.property.findMany({
@@ -375,6 +401,10 @@ export class PropertiesService {
           suites: true,
           bathrooms: true,
           parkingSpaces: true,
+          totalArea: true,
+          builtArea: true,
+          condoFee: true,
+          createdAt: true,
           rooms: {
             orderBy: { order: 'asc' },
             take: PREVIEW_LIMIT_ROOMS,
@@ -427,6 +457,11 @@ export class PropertiesService {
         bedrooms: property.bedrooms,
         bathrooms: property.bathrooms,
         parkingSpaces: property.parkingSpaces,
+        suites: property.suites,
+        totalArea: property.totalArea,
+        builtArea: property.builtArea,
+        condoFee: property.condoFee?.toString() ?? null,
+        createdAt: property.createdAt,
         previewImages,
       };
     });
@@ -941,6 +976,31 @@ export class PropertiesService {
 
     if (filters.code) {
       where.code = { contains: filters.code, mode: 'insensitive' };
+    }
+
+    /*
+     * Free-text search across code and location.
+     *
+     * `contains` with a case-insensitive collation, not full-text: at this catalogue size a
+     * tsvector column plus its trigger and migration would cost far more to maintain than it
+     * saves. Revisit if the table reaches a scale where the sequential scan shows up.
+     *
+     * Kept as its own AND clause rather than merged into `where.neighborhood`, so combining
+     * `q` with an explicit `city`/`neighborhood` filter narrows instead of overwriting.
+     */
+    if (filters.q?.trim()) {
+      const q = filters.q.trim();
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        {
+          OR: [
+            { code: { contains: q, mode: 'insensitive' } },
+            { neighborhood: { displayName: { contains: q, mode: 'insensitive' } } },
+            { neighborhood: { city: { contains: q, mode: 'insensitive' } } },
+            { neighborhood: { state: { contains: q, mode: 'insensitive' } } },
+          ],
+        },
+      ];
     }
 
     const neighborhoodFilter: Prisma.NeighborhoodWhereInput = {};
