@@ -84,6 +84,14 @@ export class PropertiesService {
       propertyData.rentPrice,
     );
     this.validateSuites(propertyData.suites, propertyData.bathrooms);
+    this.validateLandFields(createPropertyDto.type, {
+      bedrooms: propertyData.bedrooms,
+      bathrooms: propertyData.bathrooms,
+      suites: propertyData.suites,
+      parkingSpaces: propertyData.parkingSpaces,
+      builtArea: propertyData.builtArea,
+      totalArea: propertyData.totalArea,
+    });
 
     const normalizedApartment = apartment ? this.normalizeApartmentFloor(apartment) : apartment;
 
@@ -279,6 +287,34 @@ export class PropertiesService {
       throw new InvalidSubtypeDataError(
         `Suítes (${suites}) não pode ser maior que o número de banheiros (${bathrooms})`,
       );
+    }
+  }
+
+  private validateLandFields(
+    type: PropertyType,
+    fields: {
+      bedrooms?: number | null;
+      bathrooms?: number | null;
+      suites?: number | null;
+      parkingSpaces?: number | null;
+      builtArea?: number | null;
+      totalArea?: number | null;
+    },
+  ) {
+    if (type !== PropertyType.LAND) return;
+
+    const { totalArea, ...forbidden } = fields;
+
+    for (const [field, value] of Object.entries(forbidden)) {
+      if (value != null) {
+        throw new InvalidSubtypeDataError(
+          `O campo "${field}" não deve ser enviado para o tipo LAND`,
+        );
+      }
+    }
+
+    if (totalArea == null) {
+      throw new InvalidSubtypeDataError('O campo "totalArea" é obrigatório para o tipo LAND');
     }
   }
 
@@ -587,6 +623,14 @@ export class PropertiesService {
       propertyData.price !== undefined || propertyData.rentPrice !== undefined;
     const hasSuitesOrBathroomsUpdate =
       propertyData.suites !== undefined || propertyData.bathrooms !== undefined;
+    const hasLandFieldsUpdate =
+      propertyData.type !== undefined ||
+      propertyData.bedrooms !== undefined ||
+      propertyData.bathrooms !== undefined ||
+      propertyData.suites !== undefined ||
+      propertyData.parkingSpaces !== undefined ||
+      propertyData.builtArea !== undefined ||
+      propertyData.totalArea !== undefined;
     const hasLocationUpdate =
       neighborhood !== undefined || city !== undefined || state !== undefined;
     const hasCoordinatesUpdate = latitude !== undefined || longitude !== undefined;
@@ -602,12 +646,18 @@ export class PropertiesService {
       hasSaleTypesUpdate ||
       hasBusinessTypeUpdate ||
       hasPriceOrRentPriceUpdate ||
-      hasSuitesOrBathroomsUpdate;
+      hasSuitesOrBathroomsUpdate ||
+      hasLandFieldsUpdate;
     let currentProperty: {
+      type: PropertyType;
       businessType: BusinessType;
       saleTypes: { type: SaleType }[];
       suites: number | null;
       bathrooms: number | null;
+      bedrooms: number | null;
+      parkingSpaces: number | null;
+      builtArea: number | null;
+      totalArea: number | null;
       price: Prisma.Decimal | null;
       rentPrice: Prisma.Decimal | null;
     } | null = null;
@@ -616,10 +666,15 @@ export class PropertiesService {
       currentProperty = await this.prisma.property.findUnique({
         where: { id },
         select: {
+          type: true,
           businessType: true,
           saleTypes: { select: { type: true } },
           suites: true,
           bathrooms: true,
+          bedrooms: true,
+          parkingSpaces: true,
+          builtArea: true,
+          totalArea: true,
           price: true,
           rentPrice: true,
         },
@@ -644,6 +699,18 @@ export class PropertiesService {
         const effectiveSuites = propertyData.suites ?? currentProperty.suites;
         const effectiveBathrooms = propertyData.bathrooms ?? currentProperty.bathrooms;
         this.validateSuites(effectiveSuites, effectiveBathrooms);
+      }
+
+      if (hasLandFieldsUpdate) {
+        const effectiveType = propertyData.type ?? currentProperty.type;
+        this.validateLandFields(effectiveType, {
+          bedrooms: propertyData.bedrooms ?? currentProperty.bedrooms,
+          bathrooms: propertyData.bathrooms ?? currentProperty.bathrooms,
+          suites: propertyData.suites ?? currentProperty.suites,
+          parkingSpaces: propertyData.parkingSpaces ?? currentProperty.parkingSpaces,
+          builtArea: propertyData.builtArea ?? currentProperty.builtArea,
+          totalArea: propertyData.totalArea ?? currentProperty.totalArea,
+        });
       }
     }
 

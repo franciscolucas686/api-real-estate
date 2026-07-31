@@ -65,28 +65,47 @@ export class CreatePropertyDto {
   })
   condoFee?: string;
 
-  @ApiPropertyOptional({ example: 250, description: 'Área total em m²', minimum: 0 })
+  @ApiPropertyOptional({
+    example: 250,
+    description: 'Área total em m². Obrigatório para o tipo LAND (terreno).',
+    minimum: 0,
+  })
   @IsOptional()
   @IsNumber({}, { message: 'Área total deve ser um número' })
   @Min(0, { message: 'Área total não pode ser negativa' })
   @Type(() => Number)
   totalArea?: number;
 
-  @ApiPropertyOptional({ example: 180, description: 'Área construída em m²', minimum: 0 })
+  @ApiPropertyOptional({
+    example: 180,
+    description:
+      'Área construída em m². Não aplicável para o tipo LAND (terreno) — será rejeitado.',
+    minimum: 0,
+  })
   @IsOptional()
   @IsNumber({}, { message: 'Área construída deve ser um número' })
   @Min(0, { message: 'Área construída não pode ser negativa' })
   @Type(() => Number)
   builtArea?: number;
 
-  @ApiPropertyOptional({ example: 3, description: 'Quantidade de quartos', minimum: 0 })
+  @ApiPropertyOptional({
+    example: 3,
+    description:
+      'Quantidade de quartos. Não aplicável para o tipo LAND (terreno) — será rejeitado.',
+    minimum: 0,
+  })
   @IsOptional()
   @IsNumber({}, { message: 'Quartos deve ser um número' })
   @Min(0, { message: 'Quartos não pode ser negativo' })
   @Type(() => Number)
   bedrooms?: number;
 
-  @ApiPropertyOptional({ example: 2, description: 'Quantidade de banheiros', minimum: 0 })
+  @ApiPropertyOptional({
+    example: 2,
+    description:
+      'Quantidade de banheiros. Não aplicável para o tipo LAND (terreno) — será rejeitado.',
+    minimum: 0,
+  })
   @IsOptional()
   @IsNumber({}, { message: 'Banheiros deve ser um número' })
   @Min(0, { message: 'Banheiros não pode ser negativo' })
@@ -95,7 +114,8 @@ export class CreatePropertyDto {
 
   @ApiPropertyOptional({
     example: 1,
-    description: 'Quantidade de suítes (não pode ser maior que o número de banheiros)',
+    description:
+      'Quantidade de suítes (não pode ser maior que o número de banheiros). Não aplicável para o tipo LAND (terreno) — será rejeitado.',
     minimum: 0,
   })
   @IsOptional()
@@ -104,7 +124,12 @@ export class CreatePropertyDto {
   @Type(() => Number)
   suites?: number;
 
-  @ApiPropertyOptional({ example: 2, description: 'Quantidade de vagas de garagem', minimum: 0 })
+  @ApiPropertyOptional({
+    example: 2,
+    description:
+      'Quantidade de vagas de garagem. Não aplicável para o tipo LAND (terreno) — será rejeitado.',
+    minimum: 0,
+  })
   @IsOptional()
   @IsNumber({}, { message: 'Vagas de garagem deve ser um número' })
   @Min(0, { message: 'Vagas de garagem não pode ser negativo' })

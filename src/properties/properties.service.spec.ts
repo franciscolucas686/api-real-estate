@@ -12,7 +12,7 @@ import { InvalidBusinessTypeConfigError, InvalidSubtypeDataError } from '../comm
 import { GeocodingService } from '../geocoding/geocoding.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
-import { CreatePropertyDto } from './dto';
+import { CreatePropertyDto, UpdatePropertyDto } from './dto';
 import { PropertyImagesService } from './property-images.service';
 import { PropertyStatusService } from './property-status.service';
 import { PropertiesService } from './properties.service';
@@ -27,6 +27,7 @@ function baseDto(overrides: Partial<CreatePropertyDto> = {}): CreatePropertyDto 
     businessType: BusinessType.SALE,
     saleTypes: [SaleType.DIRECT],
     price: '100000.00',
+    totalArea: 500,
     land: { zoning: Zoning.RESIDENTIAL, topography: Topography.FLAT },
     ...overrides,
   } as CreatePropertyDto;
@@ -157,9 +158,110 @@ describe('PropertiesService', () => {
         neighborhoodId: 'n-1',
       });
 
-      const dto = baseDto({ suites: 1, bathrooms: 2 });
+      // suites/bathrooms são rejeitados para LAND (validateLandFields), então este caso
+      // usa HOUSE — tipo em que esses campos são permitidos — para exercitar só validateSuites.
+      const dto = baseDto({
+        type: PropertyType.HOUSE,
+        land: undefined,
+        house: { floors: 1, isInCondominium: false },
+        suites: 1,
+        bathrooms: 2,
+      });
 
       await expect(service.create(dto, 'user-1')).resolves.toMatchObject({ id: 'prop-1' });
+    });
+  });
+
+  describe('validateLandFields (via create)', () => {
+    it('bedrooms enviado com type LAND lança InvalidSubtypeDataError', async () => {
+      const dto = baseDto({ bedrooms: 3 });
+
+      await expect(service.create(dto, 'user-1')).rejects.toThrow(InvalidSubtypeDataError);
+    });
+
+    it('builtArea enviado com type LAND lança InvalidSubtypeDataError', async () => {
+      const dto = baseDto({ builtArea: 500 });
+
+      await expect(service.create(dto, 'user-1')).rejects.toThrow(InvalidSubtypeDataError);
+    });
+
+    it('LAND sem nenhum desses campos, mas com totalArea, não lança erro', async () => {
+      mockPrismaService.property.create.mockResolvedValue({
+        id: 'prop-1',
+        neighborhoodId: 'n-1',
+      });
+
+      const dto = baseDto();
+
+      await expect(service.create(dto, 'user-1')).resolves.toMatchObject({ id: 'prop-1' });
+    });
+
+    it('LAND sem totalArea lança InvalidSubtypeDataError', async () => {
+      const dto = baseDto({ totalArea: undefined });
+
+      await expect(service.create(dto, 'user-1')).rejects.toThrow(InvalidSubtypeDataError);
+    });
+  });
+
+  describe('validateLandFields (via update)', () => {
+    it('enviar bedrooms para uma propriedade LAND existente lança InvalidSubtypeDataError', async () => {
+      mockPrismaService.property.findUnique.mockResolvedValue({
+        type: PropertyType.LAND,
+        businessType: BusinessType.SALE,
+        saleTypes: [{ type: SaleType.DIRECT }],
+        suites: null,
+        bathrooms: null,
+        bedrooms: null,
+        parkingSpaces: null,
+        builtArea: null,
+        totalArea: 500,
+        price: { toString: () => '100000.00' },
+        rentPrice: null,
+      });
+
+      await expect(service.update('prop-1', { bedrooms: 2 } as UpdatePropertyDto)).rejects.toThrow(
+        InvalidSubtypeDataError,
+      );
+    });
+
+    it('mudar type para LAND sem reenviar bedrooms, mas com valor já salvo no banco, lança InvalidSubtypeDataError', async () => {
+      mockPrismaService.property.findUnique.mockResolvedValue({
+        type: PropertyType.HOUSE,
+        businessType: BusinessType.SALE,
+        saleTypes: [{ type: SaleType.DIRECT }],
+        suites: null,
+        bathrooms: null,
+        bedrooms: 3,
+        parkingSpaces: null,
+        builtArea: null,
+        totalArea: null,
+        price: { toString: () => '100000.00' },
+        rentPrice: null,
+      });
+
+      await expect(
+        service.update('prop-1', { type: PropertyType.LAND } as UpdatePropertyDto),
+      ).rejects.toThrow(InvalidSubtypeDataError);
+    });
+
+    it('mudar type para LAND sem totalArea (nem enviado, nem já salvo) lança InvalidSubtypeDataError', async () => {
+      mockPrismaService.property.findUnique.mockResolvedValue({
+        type: PropertyType.HOUSE,
+        businessType: BusinessType.SALE,
+        saleTypes: [{ type: SaleType.DIRECT }],
+        suites: null,
+        bathrooms: null,
+        bedrooms: null,
+        parkingSpaces: null,
+        builtArea: null,
+        totalArea: null,
+        price: { toString: () => '100000.00' },
+        rentPrice: null,
+      });
+
+      await expect(
+        service.update('prop-1', { type: PropertyType.LAND } as UpdatePropertyDto),
+      ).rejects.toThrow(InvalidSubtypeDataError);
     });
   });
 
