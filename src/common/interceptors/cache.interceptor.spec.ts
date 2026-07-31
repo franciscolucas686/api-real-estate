@@ -151,21 +151,39 @@ describe('CacheInterceptor', () => {
     expect(keys).toContainEqual(expect.stringContaining('auth:'));
   });
 
-  it('?nocache= ignora o cache sem poluí-lo com uma chave nova', async () => {
+  it('não existe bypass de cache — nenhum query param fura', async () => {
+    // O escape hatch `?nocache=1` foi removido: ele nunca chegou a funcionar (o
+    // ValidationPipe rejeitava a requisição com 400 logo depois deste interceptor), e
+    // expor um bypass público num endpoint cacheado justamente para manter tráfego
+    // anônimo fora do banco é um vetor de carga.
     await firstValueFrom(
       interceptor.intercept(contextFor({ authenticated: false }), handlerReturning(['cached'])),
     );
 
-    const fresh = handlerReturning(['fresh']);
-    const spy = jest.spyOn(fresh, 'handle');
+    const second = handlerReturning(['fresh']);
+    const spy = jest.spyOn(second, 'handle');
 
     const result = await firstValueFrom(
-      interceptor.intercept(contextFor({ query: { nocache: '1' } }), fresh),
+      interceptor.intercept(contextFor({ authenticated: false }), second),
     );
 
+    expect(spy).not.toHaveBeenCalled();
+    expect(result).toEqual(['cached']);
+  });
+
+  it('um `nocache` na query vira só mais uma chave, sem tratamento especial', async () => {
+    await firstValueFrom(
+      interceptor.intercept(contextFor({ authenticated: false }), handlerReturning(['sem'])),
+    );
+
+    const withParam = handlerReturning(['com']);
+    const spy = jest.spyOn(withParam, 'handle');
+
+    await firstValueFrom(interceptor.intercept(contextFor({ query: { nocache: '1' } }), withParam));
+
+    // Executa porque a query string difere, não porque o param significa algo.
     expect(spy).toHaveBeenCalled();
-    expect(result).toEqual(['fresh']);
-    expect(interceptor.getCacheStats().size).toBe(1);
+    expect(interceptor.getCacheStats().size).toBe(2);
   });
 
   it('requisições não-GET não são cacheadas', async () => {
