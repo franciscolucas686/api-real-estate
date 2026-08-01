@@ -37,6 +37,34 @@ import { PropertyImagesService } from './property-images.service';
 
 const PREVIEW_LIMIT_ROOMS = 4;
 
+/**
+ * Maps a `sort` value onto Prisma's `orderBy`.
+ *
+ * Only `createdAt` was supported, which meant a property portal with no "menor preço" — and
+ * the frontend cannot compensate, since it receives one page at a time, not the whole set.
+ *
+ * `nulls: 'last'` on price is load-bearing: `price` is null on rent-only properties (their
+ * amount lives in `rentPrice`), so ascending order would otherwise open with every rental
+ * listed as if it were the cheapest thing for sale. Ordering by `COALESCE(price, rentPrice)`
+ * would be more correct still, but needs a generated column or raw SQL — deliberately not
+ * done here, and the trade-off is documented rather than hidden.
+ */
+function buildOrderBy(sort: FilterPropertyDto['sort']): Prisma.PropertyOrderByWithRelationInput {
+  switch (sort) {
+    case 'oldest':
+      return { createdAt: 'asc' };
+    case 'price_asc':
+      return { price: { sort: 'asc', nulls: 'last' } };
+    case 'price_desc':
+      return { price: { sort: 'desc', nulls: 'last' } };
+    case 'area_desc':
+      return { totalArea: { sort: 'desc', nulls: 'last' } };
+    case 'newest':
+    default:
+      return { createdAt: 'desc' };
+  }
+}
+
 @Injectable()
 export class PropertiesService {
   constructor(
@@ -84,6 +112,14 @@ export class PropertiesService {
       propertyData.rentPrice,
     );
     this.validateSuites(propertyData.suites, propertyData.bathrooms);
+    this.validateLandFields(createPropertyDto.type, {
+      bedrooms: propertyData.bedrooms,
+      bathrooms: propertyData.bathrooms,
+      suites: propertyData.suites,
+      parkingSpaces: propertyData.parkingSpaces,
+      builtArea: propertyData.builtArea,
+      totalArea: propertyData.totalArea,
+    });
 
     const normalizedApartment = apartment ? this.normalizeApartmentFloor(apartment) : apartment;
 
@@ -282,6 +318,34 @@ export class PropertiesService {
     }
   }
 
+  private validateLandFields(
+    type: PropertyType,
+    fields: {
+      bedrooms?: number | null;
+      bathrooms?: number | null;
+      suites?: number | null;
+      parkingSpaces?: number | null;
+      builtArea?: number | null;
+      totalArea?: number | null;
+    },
+  ) {
+    if (type !== PropertyType.LAND) return;
+
+    const { totalArea, ...forbidden } = fields;
+
+    for (const [field, value] of Object.entries(forbidden)) {
+      if (value != null) {
+        throw new InvalidSubtypeDataError(
+          `O campo "${field}" não deve ser enviado para o tipo LAND`,
+        );
+      }
+    }
+
+    if (totalArea == null) {
+      throw new InvalidSubtypeDataError('O campo "totalArea" é obrigatório para o tipo LAND');
+    }
+  }
+
   private normalizeApartmentFloor(
     apartment: CreatePropertyDto['apartment'],
   ): (CreateApartmentDto & { floor: number }) | undefined {
@@ -300,17 +364,21 @@ export class PropertiesService {
     return apartment as CreateApartmentDto & { floor: number };
   }
 
-  async findAll(filters: FilterPropertyDto = {}): Promise<PropertyListResponseDto> {
-    return this.findWithFilters(filters);
+  async findAll(
+    filters: FilterPropertyDto = {},
+    isAuthenticated = false,
+  ): Promise<PropertyListResponseDto> {
+    return this.findWithFilters(filters, isAuthenticated);
   }
 
-  async findWithFilters(filters: FilterPropertyDto): Promise<PropertyListResponseDto> {
+  async findWithFilters(
+    filters: FilterPropertyDto,
+    isAuthenticated = false,
+  ): Promise<PropertyListResponseDto> {
     const { skip = 0, take = 10, sort = 'newest', ...filterParams } = filters;
 
-    const where = this.buildWhereClause(filterParams);
-    const orderBy: Prisma.PropertyOrderByWithRelationInput = {
-      createdAt: sort === 'newest' ? 'desc' : 'asc',
-    };
+    const where = this.buildWhereClause(filterParams, isAuthenticated);
+    const orderBy = buildOrderBy(sort);
 
     const [properties, total] = await Promise.all([
       this.prisma.property.findMany({
@@ -333,6 +401,10 @@ export class PropertiesService {
           suites: true,
           bathrooms: true,
           parkingSpaces: true,
+          totalArea: true,
+          builtArea: true,
+          condoFee: true,
+          createdAt: true,
           rooms: {
             orderBy: { order: 'asc' },
             take: PREVIEW_LIMIT_ROOMS,
@@ -385,6 +457,11 @@ export class PropertiesService {
         bedrooms: property.bedrooms,
         bathrooms: property.bathrooms,
         parkingSpaces: property.parkingSpaces,
+        suites: property.suites,
+        totalArea: property.totalArea,
+        builtArea: property.builtArea,
+        condoFee: property.condoFee?.toString() ?? null,
+        createdAt: property.createdAt,
         previewImages,
       };
     });
@@ -587,6 +664,14 @@ export class PropertiesService {
       propertyData.price !== undefined || propertyData.rentPrice !== undefined;
     const hasSuitesOrBathroomsUpdate =
       propertyData.suites !== undefined || propertyData.bathrooms !== undefined;
+    const hasLandFieldsUpdate =
+      propertyData.type !== undefined ||
+      propertyData.bedrooms !== undefined ||
+      propertyData.bathrooms !== undefined ||
+      propertyData.suites !== undefined ||
+      propertyData.parkingSpaces !== undefined ||
+      propertyData.builtArea !== undefined ||
+      propertyData.totalArea !== undefined;
     const hasLocationUpdate =
       neighborhood !== undefined || city !== undefined || state !== undefined;
     const hasCoordinatesUpdate = latitude !== undefined || longitude !== undefined;
@@ -602,12 +687,18 @@ export class PropertiesService {
       hasSaleTypesUpdate ||
       hasBusinessTypeUpdate ||
       hasPriceOrRentPriceUpdate ||
-      hasSuitesOrBathroomsUpdate;
+      hasSuitesOrBathroomsUpdate ||
+      hasLandFieldsUpdate;
     let currentProperty: {
+      type: PropertyType;
       businessType: BusinessType;
       saleTypes: { type: SaleType }[];
       suites: number | null;
       bathrooms: number | null;
+      bedrooms: number | null;
+      parkingSpaces: number | null;
+      builtArea: number | null;
+      totalArea: number | null;
       price: Prisma.Decimal | null;
       rentPrice: Prisma.Decimal | null;
     } | null = null;
@@ -616,10 +707,15 @@ export class PropertiesService {
       currentProperty = await this.prisma.property.findUnique({
         where: { id },
         select: {
+          type: true,
           businessType: true,
           saleTypes: { select: { type: true } },
           suites: true,
           bathrooms: true,
+          bedrooms: true,
+          parkingSpaces: true,
+          builtArea: true,
+          totalArea: true,
           price: true,
           rentPrice: true,
         },
@@ -644,6 +740,18 @@ export class PropertiesService {
         const effectiveSuites = propertyData.suites ?? currentProperty.suites;
         const effectiveBathrooms = propertyData.bathrooms ?? currentProperty.bathrooms;
         this.validateSuites(effectiveSuites, effectiveBathrooms);
+      }
+
+      if (hasLandFieldsUpdate) {
+        const effectiveType = propertyData.type ?? currentProperty.type;
+        this.validateLandFields(effectiveType, {
+          bedrooms: propertyData.bedrooms ?? currentProperty.bedrooms,
+          bathrooms: propertyData.bathrooms ?? currentProperty.bathrooms,
+          suites: propertyData.suites ?? currentProperty.suites,
+          parkingSpaces: propertyData.parkingSpaces ?? currentProperty.parkingSpaces,
+          builtArea: propertyData.builtArea ?? currentProperty.builtArea,
+          totalArea: propertyData.totalArea ?? currentProperty.totalArea,
+        });
       }
     }
 
@@ -843,10 +951,23 @@ export class PropertiesService {
     return restored;
   }
 
-  private buildWhereClause(filters: Partial<FilterPropertyDto>): Prisma.PropertyWhereInput {
+  private buildWhereClause(
+    filters: Partial<FilterPropertyDto>,
+    isAuthenticated = false,
+  ): Prisma.PropertyWhereInput {
+    // Anonymous callers are pinned to ACTIVE and cannot widen it via ?status=, which
+    // would otherwise expose PENDING/INACTIVE inventory to anyone hitting the public
+    // list endpoint. Authenticated callers keep the full filter, including "all
+    // statuses" when ?status= is omitted. Mirrors findOne()'s auth-aware filtering.
+    const statusFilter = isAuthenticated
+      ? filters.status
+        ? { status: filters.status }
+        : {}
+      : { status: PropertyStatus.ACTIVE };
+
     const where: Prisma.PropertyWhereInput = {
       deletedAt: null,
-      ...(filters.status ? { status: filters.status } : {}),
+      ...statusFilter,
     };
 
     if (filters.types && filters.types.length > 0) {
@@ -855,6 +976,31 @@ export class PropertiesService {
 
     if (filters.code) {
       where.code = { contains: filters.code, mode: 'insensitive' };
+    }
+
+    /*
+     * Free-text search across code and location.
+     *
+     * `contains` with a case-insensitive collation, not full-text: at this catalogue size a
+     * tsvector column plus its trigger and migration would cost far more to maintain than it
+     * saves. Revisit if the table reaches a scale where the sequential scan shows up.
+     *
+     * Kept as its own AND clause rather than merged into `where.neighborhood`, so combining
+     * `q` with an explicit `city`/`neighborhood` filter narrows instead of overwriting.
+     */
+    if (filters.q?.trim()) {
+      const q = filters.q.trim();
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        {
+          OR: [
+            { code: { contains: q, mode: 'insensitive' } },
+            { neighborhood: { displayName: { contains: q, mode: 'insensitive' } } },
+            { neighborhood: { city: { contains: q, mode: 'insensitive' } } },
+            { neighborhood: { state: { contains: q, mode: 'insensitive' } } },
+          ],
+        },
+      ];
     }
 
     const neighborhoodFilter: Prisma.NeighborhoodWhereInput = {};

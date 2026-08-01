@@ -78,13 +78,23 @@ export class PropertiesController {
 
   @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @Get()
+  @UseGuards(OptionalJwtGuard)
   @CacheTTL(300_000)
   @CacheKey('properties-list')
-  @ApiOperation({ summary: 'Listar propriedades com filtros' })
+  @ApiOperation({
+    summary: 'Listar propriedades com filtros',
+    description:
+      'Rota pública com autenticação opcional, no mesmo modelo de GET /properties/:id. ' +
+      'Chamadas anônimas recebem apenas imóveis ACTIVE, independentemente do filtro ?status= ' +
+      'enviado; chamadas autenticadas enxergam todos os status e podem filtrar por qualquer um.',
+  })
   @ApiResponse({ status: 200, description: 'Lista de propriedades retornada' })
   @ApiResponse({ status: 400, description: 'Filtros inválidos' })
-  async findAll(@Query() filters: FilterPropertyDto) {
-    return this.propertiesService.findAll(filters);
+  async findAll(
+    @Query() filters: FilterPropertyDto,
+    @CurrentUser() user: CurrentUserDto | undefined,
+  ) {
+    return this.propertiesService.findAll(filters, !!user);
   }
 
   @Throttle({ default: { ttl: 60_000, limit: 120 } })
