@@ -67,7 +67,8 @@ export class CreatePropertyDto {
 
   @ApiPropertyOptional({
     example: 250,
-    description: 'Área total em m². Obrigatório para o tipo LAND (terreno).',
+    description:
+      'Área total em m². Obrigatório para os tipos LAND (terreno) e APARTMENT (apartamento).',
     minimum: 0,
   })
   @IsOptional()
@@ -79,7 +80,7 @@ export class CreatePropertyDto {
   @ApiPropertyOptional({
     example: 180,
     description:
-      'Área construída em m². Não aplicável para o tipo LAND (terreno) — será rejeitado.',
+      'Área construída em m². Não aplicável para os tipos LAND (terreno) e APARTMENT (apartamento) — será rejeitado.',
     minimum: 0,
   })
   @IsOptional()

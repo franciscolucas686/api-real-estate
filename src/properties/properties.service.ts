@@ -120,6 +120,10 @@ export class PropertiesService {
       builtArea: propertyData.builtArea,
       totalArea: propertyData.totalArea,
     });
+    this.validateApartmentAreaFields(createPropertyDto.type, {
+      builtArea: propertyData.builtArea,
+      totalArea: propertyData.totalArea,
+    });
 
     const normalizedApartment = apartment ? this.normalizeApartmentFloor(apartment) : apartment;
 
@@ -343,6 +347,23 @@ export class PropertiesService {
 
     if (totalArea == null) {
       throw new InvalidSubtypeDataError('O campo "totalArea" é obrigatório para o tipo LAND');
+    }
+  }
+
+  private validateApartmentAreaFields(
+    type: PropertyType,
+    fields: { builtArea?: number | null; totalArea?: number | null },
+  ) {
+    if (type !== PropertyType.APARTMENT) return;
+
+    if (fields.builtArea != null) {
+      throw new InvalidSubtypeDataError(
+        'O campo "builtArea" não deve ser enviado para o tipo APARTMENT',
+      );
+    }
+
+    if (fields.totalArea == null) {
+      throw new InvalidSubtypeDataError('O campo "totalArea" é obrigatório para o tipo APARTMENT');
     }
   }
 
@@ -749,6 +770,10 @@ export class PropertiesService {
           bathrooms: propertyData.bathrooms ?? currentProperty.bathrooms,
           suites: propertyData.suites ?? currentProperty.suites,
           parkingSpaces: propertyData.parkingSpaces ?? currentProperty.parkingSpaces,
+          builtArea: propertyData.builtArea ?? currentProperty.builtArea,
+          totalArea: propertyData.totalArea ?? currentProperty.totalArea,
+        });
+        this.validateApartmentAreaFields(effectiveType, {
           builtArea: propertyData.builtArea ?? currentProperty.builtArea,
           totalArea: propertyData.totalArea ?? currentProperty.totalArea,
         });

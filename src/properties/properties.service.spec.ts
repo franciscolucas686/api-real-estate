@@ -205,6 +205,45 @@ describe('PropertiesService', () => {
     });
   });
 
+  describe('validateApartmentAreaFields (via create)', () => {
+    function apartmentDto(overrides: Partial<CreatePropertyDto> = {}): CreatePropertyDto {
+      return baseDto({
+        type: PropertyType.APARTMENT,
+        land: undefined,
+        apartment: {
+          floor: 3,
+          hasElevator: true,
+          hasBalcony: true,
+          sunPosition: 'MORNING' as never,
+        },
+        ...overrides,
+      });
+    }
+
+    it('builtArea enviado com type APARTMENT lança InvalidSubtypeDataError', async () => {
+      const dto = apartmentDto({ builtArea: 100 });
+
+      await expect(service.create(dto, 'user-1')).rejects.toThrow(InvalidSubtypeDataError);
+    });
+
+    it('APARTMENT sem totalArea lança InvalidSubtypeDataError', async () => {
+      const dto = apartmentDto({ totalArea: undefined });
+
+      await expect(service.create(dto, 'user-1')).rejects.toThrow(InvalidSubtypeDataError);
+    });
+
+    it('APARTMENT com totalArea e sem builtArea não lança erro', async () => {
+      mockPrismaService.property.create.mockResolvedValue({
+        id: 'prop-1',
+        neighborhoodId: 'n-1',
+      });
+
+      const dto = apartmentDto();
+
+      await expect(service.create(dto, 'user-1')).resolves.toMatchObject({ id: 'prop-1' });
+    });
+  });
+
   describe('validateLandFields (via update)', () => {
     it('enviar bedrooms para uma propriedade LAND existente lança InvalidSubtypeDataError', async () => {
       mockPrismaService.property.findUnique.mockResolvedValue({
@@ -263,6 +302,48 @@ describe('PropertiesService', () => {
 
       await expect(
         service.update('prop-1', { type: PropertyType.LAND } as UpdatePropertyDto),
+      ).rejects.toThrow(InvalidSubtypeDataError);
+    });
+  });
+
+  describe('validateApartmentAreaFields (via update)', () => {
+    it('enviar builtArea para uma propriedade APARTMENT existente lança InvalidSubtypeDataError', async () => {
+      mockPrismaService.property.findUnique.mockResolvedValue({
+        type: PropertyType.APARTMENT,
+        businessType: BusinessType.SALE,
+        saleTypes: [{ type: SaleType.DIRECT }],
+        suites: null,
+        bathrooms: null,
+        bedrooms: null,
+        parkingSpaces: null,
+        builtArea: null,
+        totalArea: 80,
+        price: { toString: () => '500000.00' },
+        rentPrice: null,
+      });
+
+      await expect(
+        service.update('prop-1', { builtArea: 70 } as UpdatePropertyDto),
+      ).rejects.toThrow(InvalidSubtypeDataError);
+    });
+
+    it('mudar type para APARTMENT sem totalArea (nem enviado, nem já salvo) lança InvalidSubtypeDataError', async () => {
+      mockPrismaService.property.findUnique.mockResolvedValue({
+        type: PropertyType.HOUSE,
+        businessType: BusinessType.SALE,
+        saleTypes: [{ type: SaleType.DIRECT }],
+        suites: null,
+        bathrooms: null,
+        bedrooms: null,
+        parkingSpaces: null,
+        builtArea: null,
+        totalArea: null,
+        price: { toString: () => '500000.00' },
+        rentPrice: null,
+      });
+
+      await expect(
+        service.update('prop-1', { type: PropertyType.APARTMENT } as UpdatePropertyDto),
       ).rejects.toThrow(InvalidSubtypeDataError);
     });
   });
