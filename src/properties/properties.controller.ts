@@ -45,6 +45,22 @@ import { PropertyRoomsService } from './property-rooms.service';
 import { PropertyStatusCountsService } from './property-status-counts.service';
 import { PropertiesService } from './properties.service';
 
+/**
+ * Teto de arquivos por requisição de upload — deliberadamente NÃO um teto de fotos
+ * por imóvel, que não existe: `uploadImages` sempre anexa ao final e nada no código
+ * conta quantas o imóvel já tem. Um imóvel com 50 ou 100 fotos é normal; o que muda
+ * é que elas chegam em lotes.
+ *
+ * O frontend fatia nesse mesmo tamanho (`UPLOAD_BATCH_SIZE` em
+ * `real-estate-app/src/features/properties/api/gallery-patch-service.ts`). Os dois
+ * números precisam concordar — se este diminuir sem o outro acompanhar, o lote do
+ * cliente passa a ser rejeitado com 400.
+ */
+export const UPLOAD_MAX_FILES_PER_REQUEST = 12;
+
+/** ~15MB cobre foto de celular em resolução máxima com folga; acima disso é anômalo. */
+export const UPLOAD_MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024;
+
 @ApiTags('Properties')
 @Controller('properties')
 export class PropertiesController {
@@ -200,9 +216,19 @@ export class PropertiesController {
   @HttpCode(201)
   @UseGuards(JwtGuard)
   @InvalidateCache('/properties')
+  // Limite por REQUISIÇÃO, não por imóvel: não há teto de fotos por imóvel em
+  // lugar nenhum, e o cliente envia 50 fotos em lotes de UPLOAD_BATCH_SIZE.
+  //
+  // O Multer bufferiza em memória todos os arquivos da requisição antes do handler
+  // rodar, e eles ficam vivos até ela terminar — é esse buffer, não o Sharp, que
+  // domina o pico de memória. Com 50 por requisição eram ~200MB só de origem, o
+  // que não deixa margem para dois corretores subindo fotos ao mesmo tempo.
+  //
+  // fileSize é a proteção que não existia: sem ela um único arquivo de 200MB é
+  // aceito e carregado inteiro na memória, derrubando o processo sozinho.
   @UseInterceptors(
-    FilesInterceptor('images', 50, {
-      limits: { files: 50 },
+    FilesInterceptor('images', UPLOAD_MAX_FILES_PER_REQUEST, {
+      limits: { files: UPLOAD_MAX_FILES_PER_REQUEST, fileSize: UPLOAD_MAX_FILE_SIZE_BYTES },
     }),
   )
   @ApiConsumes('multipart/form-data')

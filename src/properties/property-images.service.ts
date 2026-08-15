@@ -19,7 +19,12 @@ import {
 sharp.cache(false);
 sharp.concurrency(1);
 
-const IMAGE_PROCESSING_CONCURRENCY = 6;
+// 3, não 6: cada decodificação simultânea segura um bitmap cru na memória (~36MB
+// para uma foto de 12MP), e o gargalo real do upload é a rede do corretor, não a
+// CPU do servidor — dobrar a concorrência dobra o pico de memória sem ganho de
+// tempo perceptível. É o número que mantém o processo dentro de 1GB quando dois
+// uploads acontecem ao mesmo tempo.
+const IMAGE_PROCESSING_CONCURRENCY = 3;
 
 @Injectable()
 export class PropertyImagesService {
