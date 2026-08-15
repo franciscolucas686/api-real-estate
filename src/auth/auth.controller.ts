@@ -32,8 +32,15 @@ export class AuthController {
       httpOnly: true,
       secure: this.configService.isProduction(),
       sameSite: 'lax' as const,
-      // Presente só quando app e API estão em subdomínios do mesmo domínio.
-      // Sem `domain`, o cookie é host-only e nunca chega à API em api.dominio.com.
+      // Normalmente ausente, e isso é o correto — inclusive com o app no apex e a API
+      // em `api.`. Quem emite o cookie é esta API, então host-only já o prende ao host
+      // para onde os `fetch` vão; o browser o anexa, e `lax` não atrapalha porque
+      // subdomínios do mesmo domínio registrável são o mesmo *site*. Definir `domain`
+      // aqui não conserta nada e amplia a exposição: o cookie de sessão passaria a
+      // acompanhar requisições ao apex, ao www e a todo subdomínio futuro.
+      //
+      // Só faz sentido se um dia o cookie precisar chegar a um host DIFERENTE do que
+      // o emitiu (uma segunda API, por exemplo).
       ...(domain && { domain }),
     };
   }

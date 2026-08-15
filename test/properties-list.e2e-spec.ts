@@ -9,7 +9,7 @@ import { R2Service } from '../src/r2/r2.service';
 import { createAppValidationPipe } from '../src/common/pipes/app-validation.pipe';
 
 /**
- * End-to-end coverage for `GET /api/properties`.
+ * End-to-end coverage for `GET /properties`.
  *
  * This exists for one behaviour that **no unit test can reach**: the response cache.
  *
@@ -56,18 +56,17 @@ describe('Properties list (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api');
     app.useGlobalPipes(createAppValidationPipe());
     app.use(cookieParser());
     await app.init();
 
     await request(app.getHttpServer())
-      .post('/api/auth/register')
+      .post('/auth/register')
       .set('x-admin-secret', adminSecret)
       .send({ name: 'E2E List', email, password });
 
     const login = await request(app.getHttpServer())
-      .post('/api/auth/login')
+      .post('/auth/login')
       .send({ email, password })
       .expect(200);
 
@@ -88,7 +87,7 @@ describe('Properties list (e2e)', () => {
    * with 400 — and exposing a public way to skip the cache on an endpoint cached precisely
    * to keep anonymous traffic off the database is a load vector. The bypass was removed.
    */
-  const anon = (query: string) => request(app.getHttpServer()).get(`/api/properties?${query}`);
+  const anon = (query: string) => request(app.getHttpServer()).get(`/properties?${query}`);
   const auth = (query: string) => anon(query).set('Cookie', accessToken);
 
   it('caller anônimo recebe apenas ACTIVE', async () => {
@@ -117,7 +116,7 @@ describe('Properties list (e2e)', () => {
 
   it('a resposta de um autenticado NÃO é servida a um anônimo pelo cache', async () => {
     // Sem `nocache`, exercitando o cache de verdade — é isso que o guard sozinho não resolve.
-    const path = '/api/properties?take=100';
+    const path = '/properties?take=100';
 
     const authed = await request(app.getHttpServer())
       .get(path)
@@ -130,7 +129,7 @@ describe('Properties list (e2e)', () => {
   });
 
   it('e o inverso também: a resposta anônima não vaza para o autenticado', async () => {
-    const path = '/api/properties?take=100&skip=0';
+    const path = '/properties?take=100&skip=0';
 
     const anonymous = await request(app.getHttpServer()).get(path).expect(200);
     expect((anonymous.body as ListResponse).data.every((p) => p.status === 'ACTIVE')).toBe(true);
@@ -175,7 +174,7 @@ describe('Properties list (e2e)', () => {
     expect(sample).toBeDefined();
 
     const detail = await request(app.getHttpServer())
-      .get(`/api/properties/${sample.id}`)
+      .get(`/properties/${sample.id}`)
       .expect(200);
     const city = (detail.body as { city: string }).city;
 
