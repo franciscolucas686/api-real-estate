@@ -13,7 +13,7 @@ primary_region = 'gru'
   release_command = 'npx prisma migrate deploy'
 
 [env]
-  CORS_ORIGIN = 'https://francinegestoraimobiliaria.com'
+  CORS_ORIGIN = 'https://real-estate-app-three-ecru.vercel.app/'
   NODE_ENV = 'production'
   PORT = '3000'
 
