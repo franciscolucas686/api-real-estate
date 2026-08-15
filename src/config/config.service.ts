@@ -37,6 +37,10 @@ export class ConfigService {
     return this.envConfig.CORS_ORIGIN;
   }
 
+  get cookieDomain(): string | undefined {
+    return this.envConfig.COOKIE_DOMAIN;
+  }
+
   get r2AccountId(): string | undefined {
     return this.envConfig.R2_ACCOUNT_ID;
   }

@@ -20,18 +20,34 @@ export class AuthController {
     private configService: ConfigService,
   ) {}
 
-  private setAuthCookies(response: Response, accessToken: string, refreshToken: string): void {
-    response.cookie('accessToken', accessToken, {
+  /**
+   * Opções compartilhadas pelos dois cookies e pelo logout — que precisa repetir
+   * `domain` e `sameSite` exatamente, ou o `clearCookie` não casa com o cookie
+   * emitido e a sessão não é limpa de fato.
+   */
+  private cookieOptions() {
+    const domain = this.configService.cookieDomain;
+
+    return {
       httpOnly: true,
       secure: this.configService.isProduction(),
-      sameSite: 'lax',
+      sameSite: 'lax' as const,
+      // Presente só quando app e API estão em subdomínios do mesmo domínio.
+      // Sem `domain`, o cookie é host-only e nunca chega à API em api.dominio.com.
+      ...(domain && { domain }),
+    };
+  }
+
+  private setAuthCookies(response: Response, accessToken: string, refreshToken: string): void {
+    const options = this.cookieOptions();
+
+    response.cookie('accessToken', accessToken, {
+      ...options,
       maxAge: 15 * 60 * 1000,
     });
 
     response.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: this.configService.isProduction(),
-      sameSite: 'lax',
+      ...options,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
   }
@@ -165,13 +181,9 @@ export class AuthController {
     const userId = user.id;
     await this.authService.logout(userId);
 
-    const cookieOptions = {
-      httpOnly: true,
-      secure: this.configService.isProduction(),
-      sameSite: 'lax' as const,
-    };
-    response.clearCookie('accessToken', cookieOptions);
-    response.clearCookie('refreshToken', cookieOptions);
+    const options = this.cookieOptions();
+    response.clearCookie('accessToken', options);
+    response.clearCookie('refreshToken', options);
 
     return { message: 'Logout realizado com sucesso' };
   }
