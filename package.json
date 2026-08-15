@@ -8,7 +8,6 @@
   "scripts": {
     "build": "nest build",
     "seed": "npx prisma db seed",
-    "render-build": "npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build && npm prune --omit=dev",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "dotenv -e .env.development -- nest start",
     "start:dev": "dotenv -e .env.development -- nest start --watch",
@@ -62,6 +61,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
+    "@flydotio/dockerfile": "^0.7.10",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",

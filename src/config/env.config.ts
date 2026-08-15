@@ -17,14 +17,15 @@ const envSchema = z
     /**
      * Domínio dos cookies de sessão, com ponto inicial (`.seudominio.com`).
      *
-     * Só faz sentido quando frontend e API vivem em subdomínios do mesmo domínio
-     * (`app.` e `api.`): aí os cookies emitidos pela API acompanham as requisições
-     * do app e `sameSite: 'lax'` continua valendo, porque subdomínios do mesmo
-     * domínio são o mesmo *site*. Sem isso, os cookies ficam host-only e a API
-     * nunca os recebe.
+     * **Deixe vazio.** O padrão host-only é o correto mesmo com o app no apex e a API
+     * em `api.` — quem emite o cookie é esta API, então host-only já o prende ao host
+     * para onde as requisições vão, e `sameSite: 'lax'` não bloqueia nada porque
+     * subdomínios do mesmo domínio registrável são o mesmo *site*.
      *
-     * Opcional de propósito: enquanto o frontend estiver atrás do rewrite do
-     * Vercel (mesma origem), o comportamento host-only atual é o correto.
+     * Preencher só amplia a exposição: o cookie de sessão passaria a acompanhar
+     * requisições ao apex, ao www e a qualquer subdomínio futuro, nenhum dos quais
+     * precisa dele. Existe para o caso de o cookie um dia precisar alcançar um host
+     * diferente do que o emitiu.
      */
     COOKIE_DOMAIN: z
       .string()

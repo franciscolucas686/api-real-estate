@@ -17,7 +17,7 @@ describe('AllExceptionsFilter', () => {
     jsonMock = jest.fn();
     statusMock = jest.fn().mockReturnValue({ json: jsonMock });
     const response = { status: statusMock };
-    const request = { method: 'GET', path: '/api/test' };
+    const request = { method: 'GET', path: '/test' };
     return {
       switchToHttp: () => ({
         getResponse: () => response,

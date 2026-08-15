@@ -37,7 +37,6 @@ describe('Auth (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api');
     app.useGlobalPipes(createAppValidationPipe());
     app.use(cookieParser());
     await app.init();
@@ -47,9 +46,9 @@ describe('Auth (e2e)', () => {
     await app.close();
   });
 
-  it('POST /api/auth/register cria um novo usuário e retorna cookies', async () => {
+  it('POST /auth/register cria um novo usuário e retorna cookies', async () => {
     const res = await request(app.getHttpServer())
-      .post('/api/auth/register')
+      .post('/auth/register')
       .set('x-admin-secret', adminSecret)
       .send({ email, password, name: 'E2E Auth Test' })
       .expect(201);
@@ -59,9 +58,9 @@ describe('Auth (e2e)', () => {
     expect(extractCookie(res.get('Set-Cookie'), 'refreshToken')).toContain('refreshToken=');
   });
 
-  it('POST /api/auth/register com o mesmo email retorna 409', async () => {
+  it('POST /auth/register com o mesmo email retorna 409', async () => {
     const res = await request(app.getHttpServer())
-      .post('/api/auth/register')
+      .post('/auth/register')
       .set('x-admin-secret', adminSecret)
       .send({ email, password, name: 'E2E Auth Test' })
       .expect(409);
@@ -69,9 +68,9 @@ describe('Auth (e2e)', () => {
     expect(res.body.code).toBe('EMAIL_ALREADY_EXISTS');
   });
 
-  it('POST /api/auth/register com x-admin-secret errado retorna 403 ADMIN_SECRET_FORBIDDEN', async () => {
+  it('POST /auth/register com x-admin-secret errado retorna 403 ADMIN_SECRET_FORBIDDEN', async () => {
     const res = await request(app.getHttpServer())
-      .post('/api/auth/register')
+      .post('/auth/register')
       .set('x-admin-secret', 'wrong-secret')
       .send({ email: `other-${email}`, password, name: 'E2E Auth Test' })
       .expect(403);
@@ -79,9 +78,9 @@ describe('Auth (e2e)', () => {
     expect(res.body.code).toBe('ADMIN_SECRET_FORBIDDEN');
   });
 
-  it('POST /api/auth/register com payload inválido retorna 400 VALIDATION_ERROR', async () => {
+  it('POST /auth/register com payload inválido retorna 400 VALIDATION_ERROR', async () => {
     const res = await request(app.getHttpServer())
-      .post('/api/auth/register')
+      .post('/auth/register')
       .set('x-admin-secret', adminSecret)
       .send({ email: 'not-an-email', password: '123', name: '' })
       .expect(400);
@@ -90,9 +89,9 @@ describe('Auth (e2e)', () => {
     expect(Array.isArray(res.body.message)).toBe(true);
   });
 
-  it('POST /api/auth/login com credenciais corretas retorna cookies', async () => {
+  it('POST /auth/login com credenciais corretas retorna cookies', async () => {
     const res = await request(app.getHttpServer())
-      .post('/api/auth/login')
+      .post('/auth/login')
       .send({ email, password })
       .expect(200);
 
@@ -100,17 +99,17 @@ describe('Auth (e2e)', () => {
     expect(res.get('set-cookie')).toBeDefined();
   });
 
-  it('POST /api/auth/login com credenciais erradas retorna 401 INVALID_CREDENTIALS', async () => {
+  it('POST /auth/login com credenciais erradas retorna 401 INVALID_CREDENTIALS', async () => {
     const res = await request(app.getHttpServer())
-      .post('/api/auth/login')
+      .post('/auth/login')
       .send({ email, password: 'wrong-password' })
       .expect(401);
 
     expect(res.body.code).toBe('INVALID_CREDENTIALS');
   });
 
-  it('GET /api/auth/me sem cookie retorna 401', async () => {
-    await request(app.getHttpServer()).get('/api/auth/me').expect(401);
+  it('GET /auth/me sem cookie retorna 401', async () => {
+    await request(app.getHttpServer()).get('/auth/me').expect(401);
   });
 
   // Nota: sem cookie, o passport-jwt falha a extração do token antes mesmo de
@@ -119,15 +118,15 @@ describe('Auth (e2e)', () => {
   // é o fallback HTTP_EXCEPTION do filtro. Os 3 codes REFRESH_TOKEN_* reais
   // (missing/mismatch/expired) só são exercitados dentro de validate(), com
   // um refreshToken assinado válido — cobertos em jwt-refresh.strategy.spec.ts.
-  it('POST /api/auth/refresh sem cookie retorna 401 HTTP_EXCEPTION (fallback)', async () => {
-    const res = await request(app.getHttpServer()).post('/api/auth/refresh').expect(401);
+  it('POST /auth/refresh sem cookie retorna 401 HTTP_EXCEPTION (fallback)', async () => {
+    const res = await request(app.getHttpServer()).post('/auth/refresh').expect(401);
 
     expect(res.body.code).toBe('HTTP_EXCEPTION');
   });
 
   it('fluxo completo: login → me → refresh → logout', async () => {
     const loginRes = await request(app.getHttpServer())
-      .post('/api/auth/login')
+      .post('/auth/login')
       .send({ email, password })
       .expect(200);
 
@@ -135,13 +134,13 @@ describe('Auth (e2e)', () => {
     const loginRefreshCookie = extractCookie(loginRes.get('Set-Cookie'), 'refreshToken');
 
     const meRes = await request(app.getHttpServer())
-      .get('/api/auth/me')
+      .get('/auth/me')
       .set('Cookie', [loginAccessCookie])
       .expect(200);
     expect(meRes.body).toMatchObject({ email });
 
     const refreshRes = await request(app.getHttpServer())
-      .post('/api/auth/refresh')
+      .post('/auth/refresh')
       .set('Cookie', [loginRefreshCookie])
       .expect(200);
 
@@ -153,7 +152,7 @@ describe('Auth (e2e)', () => {
     expect(refreshedAccessCookie).toContain('accessToken=');
 
     await request(app.getHttpServer())
-      .post('/api/auth/logout')
+      .post('/auth/logout')
       .set('Cookie', [refreshedAccessCookie])
       .expect(200);
   });

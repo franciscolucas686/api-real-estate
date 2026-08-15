@@ -25,7 +25,7 @@ describe('CacheInterceptor', () => {
   }): ExecutionContext {
     const request = {
       method: options.method ?? 'GET',
-      path: options.path ?? '/api/properties',
+      path: options.path ?? '/properties',
       query: options.query ?? {},
       user: options.authenticated ? { id: 'user-1', email: 'a@b.com' } : undefined,
     };
