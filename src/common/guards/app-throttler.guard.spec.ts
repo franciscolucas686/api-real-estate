@@ -59,11 +59,24 @@ describe('AppThrottlerGuard', () => {
       );
     });
 
+    /**
+     * `req.ips` **não** é a cadeia `X-Forwarded-For` inteira: o `proxy-addr` já a
+     * trunca pelo `trust proxy` de `main.ts` antes de o Express montar o array. Com
+     * `trust proxy = 1` sobra exatamente uma entrada — a que o único proxy à frente
+     * (o Fly) de fato observou —, e por construção ela é igual a `req.ip`.
+     *
+     * Este mock reflete essa forma. A versão anterior passava dois elementos, o que
+     * um `trust proxy = 1` nunca produz, e sugeria que o guard estivesse lendo a ponta
+     * esquerda da cadeia — a parte que o cliente controla. Não está: IPs forjados
+     * ficam fora da janela confiável e são descartados antes de chegar aqui.
+     * Conferido contra express 5.2.1 / proxy-addr 2.0.7 com
+     * `XFF: 1.2.3.4, 5.5.5.5, 9.9.9.9` → `req.ips === ['9.9.9.9']`.
+     */
     it('cai no IP real da cadeia X-Forwarded-For quando não há cookie', async () => {
       const { getTracker } = buildGuard();
 
       await expect(
-        getTracker({ cookies: {}, ips: ['203.0.113.7', '10.0.0.1'], ip: '10.0.0.1' }),
+        getTracker({ cookies: {}, ips: ['203.0.113.7'], ip: '203.0.113.7' }),
       ).resolves.toBe('ip:203.0.113.7');
     });
 
