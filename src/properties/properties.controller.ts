@@ -14,6 +14,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { PropertyStatus } from '@prisma/client';
 import {
   ApiBody,
   ApiConsumes,
@@ -55,12 +56,36 @@ export class PropertiesController {
   ) {}
 
   @Get('status-counts')
-  @UseGuards(JwtGuard)
-  @ApiOperation({ summary: 'Retorna contagem de imóveis por status' })
-  @ApiResponse({ status: 200, description: 'Contagem por status' })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async getStatusCounts() {
-    return this.propertyStatusCountsService.getStatusCounts();
+  @UseGuards(OptionalJwtGuard)
+  @CacheTTL(60_000)
+  @CacheKey('property-status-counts')
+  @ApiOperation({
+    summary: 'Retorna contagem de imóveis por status',
+    description:
+      'Rota pública com autenticação opcional, no mesmo modelo de GET /properties. ' +
+      'Chamadas anônimas recebem apenas a contagem de ACTIVE — é o número que a home ' +
+      'do site exibe ("N imóveis disponíveis agora") e o único que faz sentido expor ' +
+      'publicamente; o tamanho da fila de PENDING/INACTIVE é informação de operação. ' +
+      'Chamadas autenticadas recebem os três status.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Contagem por status (três status para autenticados, só ACTIVE para anônimos)',
+    content: {
+      'application/json': {
+        examples: {
+          autenticado: { summary: 'Autenticado', value: { PENDING: 4, ACTIVE: 27, INACTIVE: 2 } },
+          anonimo: { summary: 'Anônimo', value: { ACTIVE: 27 } },
+        },
+      },
+    },
+  })
+  async getStatusCounts(@CurrentUser() user: CurrentUserDto | undefined) {
+    const counts = await this.propertyStatusCountsService.getStatusCounts();
+
+    if (user) return counts;
+
+    return { [PropertyStatus.ACTIVE]: counts[PropertyStatus.ACTIVE] };
   }
 
   @Post()
@@ -111,7 +136,8 @@ export class PropertiesController {
     return this.propertiesService.findOne(id, !!user);
   }
 
-  @Throttle({ default: { ttl: 3600_000, limit: 60 } })
+  // 120/hora por usuário: um operador editando fichas em sequência encostava nos 60.
+  @Throttle({ default: { ttl: 3600_000, limit: 120 } })
   @Patch(':id')
   @UseGuards(JwtGuard)
   @InvalidateCache('/properties')
@@ -218,7 +244,9 @@ export class PropertiesController {
     return this.propertyImagesService.uploadImages(propertyId, files, roomId || undefined);
   }
 
-  @Throttle({ default: { ttl: 3600_000, limit: 30 } })
+  // Um teto horário num endpoint de lote anula o motivo de ele ser em lote: limpar
+  // três galerias grandes numa tarde já batia nos 30/hora. 60/60s por usuário.
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @Delete(':propertyId/images')
   @HttpCode(204)
   @UseGuards(JwtGuard)
