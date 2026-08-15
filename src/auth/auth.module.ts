@@ -25,6 +25,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   ],
   providers: [AuthService, JwtStrategy, JwtRefreshStrategy],
   controllers: [AuthController],
-  exports: [AuthService],
+  // JwtModule sai daqui porque `AppThrottlerGuard` (registrado como APP_GUARD no
+  // AppModule) verifica o cookie accessToken para chavear o rate limit por usuário.
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -12,8 +13,19 @@ const logger = new Logger('NestApplication');
 async function bootstrap() {
   const envConfig = validateEnvConfig();
 
-  const app = await NestFactory.create(AppModule);
+  // Tipado como NestExpressApplication porque `app.set` (usado logo abaixo para o
+  // `trust proxy`) é da instância do Express, não da interface genérica do Nest.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.enableShutdownHooks();
+
+  // O app nunca recebe conexões diretas do navegador: em produção o rewrite de
+  // `/api/*` no vercel.json do frontend encaminha para cá server-side, e o Render
+  // ainda coloca o proxy dele na frente. Sem `trust proxy` o Express reporta em
+  // `req.ip` o peer TCP imediato — o proxy — para *todo mundo*, e o throttler
+  // (que chaveia por `req.ip`) colapsa a internet inteira num único balde por
+  // rota. Com isto `req.ips` passa a carregar a cadeia do X-Forwarded-For, que é
+  // o que `AppThrottlerGuard.getTracker` consome.
+  app.set('trust proxy', 1);
 
   app.setGlobalPrefix('api');
 

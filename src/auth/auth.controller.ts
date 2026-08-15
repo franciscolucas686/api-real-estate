@@ -96,7 +96,11 @@ export class AuthController {
   @Post('refresh')
   @UseGuards(JwtRefreshGuard)
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { ttl: 5 * 60 * 1000, limit: 10 } })
+  // Chaveado por IP, não por usuário: o access token está expirado justamente por
+  // isso a rota foi chamada, então `AppThrottlerGuard.getTracker` cai no balde de IP.
+  // 10/5min era apertado demais para um NAT corporativo ou uma operadora móvel, onde
+  // várias sessões legítimas dividem o mesmo endereço.
+  @Throttle({ default: { ttl: 5 * 60 * 1000, limit: 30 } })
   @ApiOperation({ summary: 'Atualizar token de acesso' })
   @ApiResponse({
     status: HttpStatus.OK,
