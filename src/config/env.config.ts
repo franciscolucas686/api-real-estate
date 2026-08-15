@@ -14,6 +14,23 @@ const envSchema = z
 
     CORS_ORIGIN: z.union([z.url(), z.literal('*')]).optional(),
 
+    /**
+     * Domínio dos cookies de sessão, com ponto inicial (`.seudominio.com`).
+     *
+     * Só faz sentido quando frontend e API vivem em subdomínios do mesmo domínio
+     * (`app.` e `api.`): aí os cookies emitidos pela API acompanham as requisições
+     * do app e `sameSite: 'lax'` continua valendo, porque subdomínios do mesmo
+     * domínio são o mesmo *site*. Sem isso, os cookies ficam host-only e a API
+     * nunca os recebe.
+     *
+     * Opcional de propósito: enquanto o frontend estiver atrás do rewrite do
+     * Vercel (mesma origem), o comportamento host-only atual é o correto.
+     */
+    COOKIE_DOMAIN: z
+      .string()
+      .regex(/^\.[a-z0-9.-]+$/i, 'COOKIE_DOMAIN deve começar com ponto, ex: .seudominio.com')
+      .optional(),
+
     JWT_SECRET: z.string().min(32, 'JWT_SECRET deve ter no mínimo 32 caracteres'),
 
     JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET deve ter no mínimo 32 caracteres'),

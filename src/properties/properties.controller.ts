@@ -14,6 +14,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { PropertyStatus } from '@prisma/client';
 import {
   ApiBody,
   ApiConsumes,
@@ -44,6 +45,22 @@ import { PropertyRoomsService } from './property-rooms.service';
 import { PropertyStatusCountsService } from './property-status-counts.service';
 import { PropertiesService } from './properties.service';
 
+/**
+ * Teto de arquivos por requisição de upload — deliberadamente NÃO um teto de fotos
+ * por imóvel, que não existe: `uploadImages` sempre anexa ao final e nada no código
+ * conta quantas o imóvel já tem. Um imóvel com 50 ou 100 fotos é normal; o que muda
+ * é que elas chegam em lotes.
+ *
+ * O frontend fatia nesse mesmo tamanho (`UPLOAD_BATCH_SIZE` em
+ * `real-estate-app/src/features/properties/api/gallery-patch-service.ts`). Os dois
+ * números precisam concordar — se este diminuir sem o outro acompanhar, o lote do
+ * cliente passa a ser rejeitado com 400.
+ */
+export const UPLOAD_MAX_FILES_PER_REQUEST = 12;
+
+/** ~15MB cobre foto de celular em resolução máxima com folga; acima disso é anômalo. */
+export const UPLOAD_MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024;
+
 @ApiTags('Properties')
 @Controller('properties')
 export class PropertiesController {
@@ -55,12 +72,36 @@ export class PropertiesController {
   ) {}
 
   @Get('status-counts')
-  @UseGuards(JwtGuard)
-  @ApiOperation({ summary: 'Retorna contagem de imóveis por status' })
-  @ApiResponse({ status: 200, description: 'Contagem por status' })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async getStatusCounts() {
-    return this.propertyStatusCountsService.getStatusCounts();
+  @UseGuards(OptionalJwtGuard)
+  @CacheTTL(60_000)
+  @CacheKey('property-status-counts')
+  @ApiOperation({
+    summary: 'Retorna contagem de imóveis por status',
+    description:
+      'Rota pública com autenticação opcional, no mesmo modelo de GET /properties. ' +
+      'Chamadas anônimas recebem apenas a contagem de ACTIVE — é o número que a home ' +
+      'do site exibe ("N imóveis disponíveis agora") e o único que faz sentido expor ' +
+      'publicamente; o tamanho da fila de PENDING/INACTIVE é informação de operação. ' +
+      'Chamadas autenticadas recebem os três status.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Contagem por status (três status para autenticados, só ACTIVE para anônimos)',
+    content: {
+      'application/json': {
+        examples: {
+          autenticado: { summary: 'Autenticado', value: { PENDING: 4, ACTIVE: 27, INACTIVE: 2 } },
+          anonimo: { summary: 'Anônimo', value: { ACTIVE: 27 } },
+        },
+      },
+    },
+  })
+  async getStatusCounts(@CurrentUser() user: CurrentUserDto | undefined) {
+    const counts = await this.propertyStatusCountsService.getStatusCounts();
+
+    if (user) return counts;
+
+    return { [PropertyStatus.ACTIVE]: counts[PropertyStatus.ACTIVE] };
   }
 
   @Post()
@@ -111,7 +152,8 @@ export class PropertiesController {
     return this.propertiesService.findOne(id, !!user);
   }
 
-  @Throttle({ default: { ttl: 3600_000, limit: 60 } })
+  // 120/hora por usuário: um operador editando fichas em sequência encostava nos 60.
+  @Throttle({ default: { ttl: 3600_000, limit: 120 } })
   @Patch(':id')
   @UseGuards(JwtGuard)
   @InvalidateCache('/properties')
@@ -174,9 +216,19 @@ export class PropertiesController {
   @HttpCode(201)
   @UseGuards(JwtGuard)
   @InvalidateCache('/properties')
+  // Limite por REQUISIÇÃO, não por imóvel: não há teto de fotos por imóvel em
+  // lugar nenhum, e o cliente envia 50 fotos em lotes de UPLOAD_BATCH_SIZE.
+  //
+  // O Multer bufferiza em memória todos os arquivos da requisição antes do handler
+  // rodar, e eles ficam vivos até ela terminar — é esse buffer, não o Sharp, que
+  // domina o pico de memória. Com 50 por requisição eram ~200MB só de origem, o
+  // que não deixa margem para dois corretores subindo fotos ao mesmo tempo.
+  //
+  // fileSize é a proteção que não existia: sem ela um único arquivo de 200MB é
+  // aceito e carregado inteiro na memória, derrubando o processo sozinho.
   @UseInterceptors(
-    FilesInterceptor('images', 50, {
-      limits: { files: 50 },
+    FilesInterceptor('images', UPLOAD_MAX_FILES_PER_REQUEST, {
+      limits: { files: UPLOAD_MAX_FILES_PER_REQUEST, fileSize: UPLOAD_MAX_FILE_SIZE_BYTES },
     }),
   )
   @ApiConsumes('multipart/form-data')
@@ -218,7 +270,9 @@ export class PropertiesController {
     return this.propertyImagesService.uploadImages(propertyId, files, roomId || undefined);
   }
 
-  @Throttle({ default: { ttl: 3600_000, limit: 30 } })
+  // Um teto horário num endpoint de lote anula o motivo de ele ser em lote: limpar
+  // três galerias grandes numa tarde já batia nos 30/hora. 60/60s por usuário.
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @Delete(':propertyId/images')
   @HttpCode(204)
   @UseGuards(JwtGuard)
