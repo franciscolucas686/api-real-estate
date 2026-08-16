@@ -51,6 +51,11 @@ const envSchema = z
     if (env.NODE_ENV === 'production') {
       const requiredInProd = [
         'DATABASE_URL',
+        // Ausente, o `enableCors` de `main.ts` cai no default `*` do pacote `cors`, que
+        // com `credentials: true` o navegador recusa: o app sobe, o site carrega e
+        // nenhum imóvel aparece — erro visível só no console de quem visita. Falhar no
+        // boot, com o nome da variável, é o diagnóstico que essa falha não tem.
+        'CORS_ORIGIN',
         'R2_ACCOUNT_ID',
         'R2_ACCESS_KEY_ID',
         'R2_SECRET_ACCESS_KEY',

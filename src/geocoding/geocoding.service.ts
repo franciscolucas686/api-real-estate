@@ -30,14 +30,33 @@ export interface ReverseGeocodeResult {
   longitude: number;
 }
 
+/**
+ * A política de uso do Nominatim é de no máximo 1 requisição por segundo para a
+ * aplicação inteira, e quem excede é bloqueado por IP.
+ */
 const MIN_INTERVAL_MS = 1000;
 
 @Injectable()
 export class GeocodingService {
-  private lastCall = 0;
+  /**
+   * Instante em que a *próxima* chamada pode sair, não o da última que saiu.
+   *
+   * A versão anterior guardava `lastCall` e só o atualizava **depois** do await, o
+   * que não serializava nada: N chamadas concorrentes liam o mesmo valor velho,
+   * calculavam a mesma espera, dormiam juntas e disparavam juntas. Ela atrasava uma
+   * rajada em vez de espaçá-la — exatamente o que a política do Nominatim proíbe.
+   *
+   * Reservando a janela de forma síncrona, antes de qualquer await, cada chamada
+   * pega um slot próprio e a fila fica de fato espaçada em 1s.
+   */
+  private nextSlot = 0;
 
-  private throttle(): Promise<void> {
-    const wait = MIN_INTERVAL_MS - (Date.now() - this.lastCall);
+  private reserveSlot(): Promise<void> {
+    const now = Date.now();
+    const slot = Math.max(now, this.nextSlot);
+    this.nextSlot = slot + MIN_INTERVAL_MS;
+
+    const wait = slot - now;
     if (wait <= 0) return Promise.resolve();
     return new Promise((resolve) => setTimeout(resolve, wait));
   }
@@ -51,8 +70,7 @@ export class GeocodingService {
     const query = `${displayName}, ${city}, ${state}, Brasil`;
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
 
-    await this.throttle();
-    this.lastCall = Date.now();
+    await this.reserveSlot();
 
     const res = await fetch(url, {
       signal: AbortSignal.timeout(8000),
@@ -81,8 +99,7 @@ export class GeocodingService {
   async reverseGeocode(latitude: number, longitude: number): Promise<ReverseGeocodeResult> {
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&accept-language=pt-BR,pt,en`;
 
-    await this.throttle();
-    this.lastCall = Date.now();
+    await this.reserveSlot();
 
     try {
       const response = await fetch(url, {

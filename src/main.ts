@@ -18,19 +18,19 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.enableShutdownHooks();
 
-  // O app nunca recebe conexões diretas do navegador: em produção o rewrite de
-  // `/api/*` no vercel.json do frontend encaminha para cá server-side (removendo o
-  // `/api` no caminho, que existe só do lado do frontend), e a plataforma de deploy
-  // ainda coloca o proxy dela na frente. Sem `trust proxy` o Express reporta em
-  // `req.ip` o peer TCP imediato — o proxy — para *todo mundo*, e o throttler
-  // (que chaveia por `req.ip`) colapsa a internet inteira num único balde por
-  // rota. Com isto `req.ips` passa a carregar a cadeia do X-Forwarded-For, que é
-  // o que `AppThrottlerGuard.getTracker` consome.
+  // O navegador fala direto com esta app (o rewrite de `/api` do Vercel saiu), mas a
+  // plataforma de deploy continua pondo o proxy dela na frente — no Fly o `http_service`
+  // termina o TLS e encaminha para a máquina. Sem `trust proxy` o Express reporta em
+  // `req.ip` o peer TCP imediato — o proxy — para *todo mundo*, e o throttler (que
+  // chaveia por `req.ip`) colapsa a internet inteira num único balde por rota. Com isto
+  // `req.ips` passa a carregar a cadeia do X-Forwarded-For já truncada nesse número de
+  // hops, que é o que `AppThrottlerGuard.getTracker` consome — ver o comentário lá para
+  // por que o `1` é o que torna o valor não-forjável.
   app.set('trust proxy', 1);
 
   // Sem prefixo global: as rotas são servidas na raiz do host (`api.dominio.com/properties`).
-  // O `/api` que ainda aparece no frontend é um caminho local dele, resolvido pelo rewrite do
-  // `vercel.json` (e pelo proxy do Vite em dev) — nunca chega até aqui.
+  // O `/api` que ainda aparece no frontend é um caminho local **de dev**, que o proxy do
+  // Vite remove ao encaminhar — nunca chega até aqui, e em produção não há proxy nenhum.
 
   app.useGlobalPipes(createAppValidationPipe());
   app.use(helmet());

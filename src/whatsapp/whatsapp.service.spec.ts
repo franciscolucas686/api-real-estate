@@ -90,6 +90,25 @@ describe('WhatsappService', () => {
 
       expect(results.size).toBeGreaterThan(1);
     });
+
+    // Regressão: com `parseInt(md5, 16)` o valor era um double de ~2^127, portanto
+    // sempre par, e `% 2` dava 0 para todo imóvel — o segundo número nunca recebia
+    // nenhum. O teste acima não pegava porque usa 3 números, a única quantidade
+    // pequena que escapava. Duas é o caso real.
+    it('distribui de verdade com um número PAR de números ativos', async () => {
+      const mockNumbers = [
+        { id: '1', number: '11111111111', isActive: true, order: 0, createdAt: new Date() },
+        { id: '2', number: '22222222222', isActive: true, order: 1, createdAt: new Date() },
+      ];
+      prisma.whatsappNumber.findMany.mockResolvedValue(mockNumbers);
+
+      const results = new Set<string>();
+      for (let i = 0; i < 50; i++) {
+        results.add((await service.getWhatsappNumber(`property-${i}`))!);
+      }
+
+      expect(results).toEqual(new Set(['11111111111', '22222222222']));
+    });
   });
 
   describe('create', () => {

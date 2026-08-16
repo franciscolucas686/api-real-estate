@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { randomUUID } from 'node:crypto';
 import {
   EmailAlreadyExistsError,
   InvalidCredentialsError,
@@ -10,6 +11,10 @@ import { ConfigService } from '../config/config.service';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { SessionsService } from './sessions.service';
+
+/** Validade do refresh token, em dias. Desliza a cada rotação. */
+const REFRESH_TOKEN_DAYS = 7;
 
 @Injectable()
 export class AuthService {
@@ -17,9 +22,10 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private sessionsService: SessionsService,
   ) {}
 
-  async register(registerDto: RegisterDto) {
+  async register(registerDto: RegisterDto, userAgent?: string | null) {
     const { email, password, name } = registerDto;
 
     const existingUser = await this.usersService.findByEmail(email);
@@ -35,7 +41,7 @@ export class AuthService {
       name,
     });
 
-    const { accessToken, refreshToken } = await this.generateTokens(user.id, user.email);
+    const { accessToken, refreshToken } = await this.startSession(user.id, user.email, userAgent);
 
     return {
       accessToken,
@@ -44,7 +50,7 @@ export class AuthService {
     };
   }
 
-  async login(loginDto: LoginDto) {
+  async login(loginDto: LoginDto, userAgent?: string | null) {
     const { email, password } = loginDto;
 
     const user = await this.usersService.findByEmail(email);
@@ -57,7 +63,7 @@ export class AuthService {
       throw new InvalidCredentialsError();
     }
 
-    const { accessToken, refreshToken } = await this.generateTokens(user.id, user.email);
+    const { accessToken, refreshToken } = await this.startSession(user.id, user.email, userAgent);
 
     return {
       accessToken,
@@ -70,43 +76,82 @@ export class AuthService {
     };
   }
 
-  async refreshToken(userId: string) {
+  /**
+   * Rotaciona **apenas** a sessão apresentada. As outras sessões do usuário —
+   * outros dispositivos — seguem intactas, que é o ponto do modelo de sessões.
+   */
+  async refreshToken(userId: string, sessionId: string) {
     const user = await this.usersService.findById(userId);
     if (!user) {
       throw new UserNotFoundError();
     }
 
-    const { accessToken, refreshToken } = await this.generateTokens(user.id, user.email);
+    const { accessToken, refreshToken, expiresAt } = this.signTokens(
+      user.id,
+      user.email,
+      sessionId,
+    );
+
+    await this.sessionsService.rotate(sessionId, refreshToken, expiresAt);
 
     return { accessToken, refreshToken };
   }
 
-  async logout(userId: string) {
-    await this.usersService.updateRefreshToken(userId, null);
+  /** Encerra só o dispositivo que chamou. */
+  async logout(sessionId: string) {
+    await this.sessionsService.delete(sessionId);
     return { message: 'Logout realizado com sucesso' };
   }
 
-  private async generateTokens(userId: string, email: string) {
-    const payload = { sub: userId, email };
+  /** Encerra todos os dispositivos do usuário, incluindo o que chamou. */
+  async logoutAll(userId: string) {
+    const count = await this.sessionsService.deleteAllForUser(userId);
+    return { message: 'Sessões encerradas em todos os dispositivos', count };
+  }
 
-    const accessToken = this.jwtService.sign(payload, {
-      secret: this.configService.jwtSecret,
-      expiresIn: '15m',
-    });
+  /**
+   * Sorteia o id da sessão, assina os tokens com ele e só então grava a linha —
+   * nessa ordem porque o `sid` precisa estar dentro dos tokens, o que permite uma
+   * única escrita em vez de inserir e depois atualizar.
+   */
+  private async startSession(userId: string, email: string, userAgent?: string | null) {
+    const sessionId = randomUUID();
+    const { accessToken, refreshToken, expiresAt } = this.signTokens(userId, email, sessionId);
 
-    const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.jwtRefreshSecret,
-      expiresIn: '7d',
-    });
-
-    const refreshTokenExpiresAt = new Date();
-    refreshTokenExpiresAt.setDate(refreshTokenExpiresAt.getDate() + 7);
-
-    await this.usersService.updateRefreshToken(userId, refreshToken, refreshTokenExpiresAt);
-
-    return {
-      accessToken,
+    await this.sessionsService.create({
+      id: sessionId,
+      userId,
       refreshToken,
-    } as const;
+      expiresAt,
+      userAgent,
+    });
+
+    return { accessToken, refreshToken } as const;
+  }
+
+  /**
+   * `sid` vai nos **dois** tokens: o refresh precisa dele para achar a linha por chave
+   * primária, e o access precisa porque `POST /auth/logout` é guardado por `JwtGuard` e
+   * tem que saber qual sessão apagar.
+   *
+   * `jti` vai só no refresh, e é o que torna cada rotação distinta: sem ele, duas emissões
+   * no mesmo segundo produzem bytes idênticos (payload igual + `iat` em segundos), o que
+   * tornava impossível afirmar em teste que o token mudou.
+   */
+  private signTokens(userId: string, email: string, sessionId: string) {
+    const accessToken = this.jwtService.sign(
+      { sub: userId, email, sid: sessionId },
+      { secret: this.configService.jwtSecret, expiresIn: '15m' },
+    );
+
+    const refreshToken = this.jwtService.sign(
+      { sub: userId, sid: sessionId, jti: randomUUID() },
+      { secret: this.configService.jwtRefreshSecret, expiresIn: `${REFRESH_TOKEN_DAYS}d` },
+    );
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_DAYS);
+
+    return { accessToken, refreshToken, expiresAt } as const;
   }
 }

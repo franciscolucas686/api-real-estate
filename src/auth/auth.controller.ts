@@ -1,5 +1,22 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res, UseGuards } from '@nestjs/common';
-import { ApiBody, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBody,
+  ApiHeader,
+  ApiOperation,
+  ApiResponse,
+  ApiSecurity,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { ConfigService } from '../config/config.service';
@@ -45,6 +62,18 @@ export class AuthController {
     };
   }
 
+  /**
+   * Rótulo de diagnóstico da sessão, não identidade — nada depende dele. Truncado
+   * porque o User-Agent é texto arbitrário vindo do cliente e vai para uma coluna
+   * sem limite; 255 é folgado para qualquer navegador real.
+   */
+  private static readonly USER_AGENT_MAX_LENGTH = 255;
+
+  private truncateUserAgent(userAgent?: string): string | null {
+    if (!userAgent) return null;
+    return userAgent.slice(0, AuthController.USER_AGENT_MAX_LENGTH);
+  }
+
   private setAuthCookies(response: Response, accessToken: string, refreshToken: string): void {
     const options = this.cookieOptions();
 
@@ -57,6 +86,16 @@ export class AuthController {
       ...options,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
+  }
+
+  /**
+   * Tira as opções do mesmo `cookieOptions()` de propósito: o navegador casa o cookie a
+   * apagar por nome + domínio + path, então um clear que discorde do set não limpa nada.
+   */
+  private clearAuthCookies(response: Response): void {
+    const options = this.cookieOptions();
+    response.clearCookie('accessToken', options);
+    response.clearCookie('refreshToken', options);
   }
 
   @Post('register')
@@ -81,8 +120,15 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Email já cadastrado' })
   @ApiResponse({ status: 403, description: 'Acesso não autorizado' })
-  async register(@Body() registerDto: RegisterDto, @Res({ passthrough: true }) response: Response) {
-    const { accessToken, refreshToken, user } = await this.authService.register(registerDto);
+  async register(
+    @Body() registerDto: RegisterDto,
+    @Res({ passthrough: true }) response: Response,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    const { accessToken, refreshToken, user } = await this.authService.register(
+      registerDto,
+      this.truncateUserAgent(userAgent),
+    );
 
     this.setAuthCookies(response, accessToken, refreshToken);
 
@@ -106,8 +152,15 @@ export class AuthController {
     },
   })
   @ApiResponse({ status: 401, description: 'Email ou senha inválidos' })
-  async login(@Body() loginDto: LoginDto, @Res({ passthrough: true }) response: Response) {
-    const { accessToken, refreshToken, user } = await this.authService.login(loginDto);
+  async login(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) response: Response,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    const { accessToken, refreshToken, user } = await this.authService.login(
+      loginDto,
+      this.truncateUserAgent(userAgent),
+    );
 
     this.setAuthCookies(response, accessToken, refreshToken);
 
@@ -137,7 +190,10 @@ export class AuthController {
     @CurrentUser() user: CurrentUserDto,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const { accessToken, refreshToken } = await this.authService.refreshToken(user.id);
+    const { accessToken, refreshToken } = await this.authService.refreshToken(
+      user.id,
+      user.sessionId,
+    );
 
     this.setAuthCookies(response, accessToken, refreshToken);
 
@@ -170,14 +226,18 @@ export class AuthController {
   @Post('logout')
   @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Fazer logout' })
+  @ApiSecurity('cookie')
+  @ApiOperation({
+    summary: 'Fazer logout',
+    description:
+      'Encerra apenas a sessão deste dispositivo. As sessões abertas em outros ' +
+      'dispositivos continuam válidas — use POST /auth/logout-all para derrubar todas.',
+  })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Logout realizado com sucesso',
-    schema: {
-      example: {
-        message: 'Logout realizado com sucesso',
-      },
+    content: {
+      'application/json': { example: { message: 'Logout realizado com sucesso' } },
     },
   })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
@@ -185,13 +245,42 @@ export class AuthController {
     @CurrentUser() user: CurrentUserDto,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const userId = user.id;
-    await this.authService.logout(userId);
+    await this.authService.logout(user.sessionId);
 
-    const options = this.cookieOptions();
-    response.clearCookie('accessToken', options);
-    response.clearCookie('refreshToken', options);
+    this.clearAuthCookies(response);
 
     return { message: 'Logout realizado com sucesso' };
+  }
+
+  @Post('logout-all')
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiSecurity('cookie')
+  @ApiOperation({
+    summary: 'Sair de todos os dispositivos',
+    description:
+      'Apaga todas as sessões do usuário, inclusive a que fez a chamada. Todo refresh ' +
+      'token emitido para esta conta deixa de valer imediatamente. É a ação a usar ' +
+      'quando se suspeita que uma sessão vazou.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Sessões encerradas',
+    content: {
+      'application/json': {
+        example: { message: 'Sessões encerradas em todos os dispositivos', count: 3 },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async logoutAll(
+    @CurrentUser() user: CurrentUserDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.logoutAll(user.id);
+
+    this.clearAuthCookies(response);
+
+    return result;
   }
 }

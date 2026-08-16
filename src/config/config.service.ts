@@ -1,24 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { validateEnvConfig, type EnvConfig } from './env.config';
 
+/**
+ * Acesso tipado ao ambiente já validado.
+ *
+ * Só expõe o que alguém injeta. Os getters `config`, `nodeEnv`, `port`, `corsOrigin`,
+ * `isDevelopment()` e `isTest()` existiam sem um único chamador — `main.ts` lê `PORT` e
+ * `CORS_ORIGIN` direto do retorno de `validateEnvConfig()`, antes de o Nest existir, e
+ * nada no app ramifica por ambiente além do `secure` do cookie. Um getter sem consumidor
+ * é um convite a ramificar por `NODE_ENV` dentro do código, que é justamente o que a
+ * seleção de ambiente por script (`dotenv-cli`) existe para evitar.
+ */
 @Injectable()
 export class ConfigService {
   private envConfig: EnvConfig;
 
   constructor() {
     this.envConfig = validateEnvConfig();
-  }
-
-  get config(): EnvConfig {
-    return this.envConfig;
-  }
-
-  get nodeEnv(): string {
-    return this.envConfig.NODE_ENV;
-  }
-
-  get port(): number {
-    return this.envConfig.PORT;
   }
 
   get databaseUrl(): string | undefined {
@@ -31,10 +29,6 @@ export class ConfigService {
 
   get jwtRefreshSecret(): string {
     return this.envConfig.JWT_REFRESH_SECRET;
-  }
-
-  get corsOrigin(): string | undefined {
-    return this.envConfig.CORS_ORIGIN;
   }
 
   get cookieDomain(): string | undefined {
@@ -71,13 +65,5 @@ export class ConfigService {
 
   isProduction(): boolean {
     return this.envConfig.NODE_ENV === 'production';
-  }
-
-  isDevelopment(): boolean {
-    return this.envConfig.NODE_ENV === 'development';
-  }
-
-  isTest(): boolean {
-    return this.envConfig.NODE_ENV === 'test';
   }
 }

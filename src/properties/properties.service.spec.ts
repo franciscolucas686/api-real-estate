@@ -47,9 +47,12 @@ describe('PropertiesService', () => {
     propertyImage: {
       count: jest.fn(),
     },
+    $transaction: jest.fn(),
   };
 
-  const mockPropertyImagesService = {};
+  const mockPropertyImagesService = {
+    movePropertyImagesToDeleted: jest.fn(),
+  };
   const mockWhatsappService = {};
   const mockEventEmitter = { emit: jest.fn() };
   const mockGeocodingService = { reverseGeocode: jest.fn() };
@@ -125,6 +128,64 @@ describe('PropertiesService', () => {
       expect(mockEventEmitter.emit).toHaveBeenCalledWith('property.saved', {
         neighborhoodId: 'n-1',
       });
+    });
+
+    // A regra existia só no formulário do frontend, então qualquer chamada direta
+    // à API passava por cima dela.
+    it('SALE com condoFee maior que price lança InvalidBusinessTypeConfigError', async () => {
+      const dto = baseDto({
+        businessType: BusinessType.SALE,
+        saleTypes: [SaleType.DIRECT],
+        price: '250000.00',
+        condoFee: '300000.00',
+      });
+
+      await expect(service.create(dto, 'user-1')).rejects.toThrow(InvalidBusinessTypeConfigError);
+    });
+
+    it('RENT compara condoFee com rentPrice, não com price', async () => {
+      mockPrismaService.property.create.mockResolvedValue({ id: 'prop-1', neighborhoodId: 'n-1' });
+
+      // Maior que o rentPrice → rejeita.
+      await expect(
+        service.create(
+          baseDto({
+            businessType: BusinessType.RENT,
+            saleTypes: [],
+            price: undefined,
+            rentPrice: '2000.00',
+            condoFee: '2500.00',
+          }),
+          'user-1',
+        ),
+      ).rejects.toThrow(InvalidBusinessTypeConfigError);
+
+      // Menor que o rentPrice → passa, mesmo sem price nenhum.
+      await expect(
+        service.create(
+          baseDto({
+            businessType: BusinessType.RENT,
+            saleTypes: [],
+            price: undefined,
+            rentPrice: '2000.00',
+            condoFee: '800.00',
+          }),
+          'user-1',
+        ),
+      ).resolves.toMatchObject({ id: 'prop-1' });
+    });
+
+    it('condoFee igual ao preço é aceito — a regra é "maior que"', async () => {
+      mockPrismaService.property.create.mockResolvedValue({ id: 'prop-1', neighborhoodId: 'n-1' });
+
+      const dto = baseDto({
+        businessType: BusinessType.SALE,
+        saleTypes: [SaleType.DIRECT],
+        price: '250000.00',
+        condoFee: '250000.00',
+      });
+
+      await expect(service.create(dto, 'user-1')).resolves.toMatchObject({ id: 'prop-1' });
     });
   });
 
@@ -306,6 +367,67 @@ describe('PropertiesService', () => {
     });
   });
 
+  /**
+   * `null` explícito no corpo do PATCH significa "limpar", e a validação condicional
+   * precisa enxergá-lo. Com `??` ela lia o valor antigo e aprovava — o `@IsOptional()`
+   * do class-validator trata `null` como ausência, então o `null` atravessava a
+   * validação de forma e era gravado assim mesmo.
+   */
+  describe('update — null explícito é o valor efetivo, não "não mexeu"', () => {
+    function currentSaleProperty(overrides: Record<string, unknown> = {}) {
+      return {
+        type: PropertyType.HOUSE,
+        businessType: BusinessType.SALE,
+        saleTypes: [{ type: SaleType.DIRECT }],
+        suites: null,
+        bathrooms: null,
+        bedrooms: null,
+        parkingSpaces: null,
+        builtArea: null,
+        totalArea: null,
+        price: { toString: () => '100000.00' },
+        rentPrice: null,
+        condoFee: null,
+        ...overrides,
+      };
+    }
+
+    it('limpar o price de um imóvel SALE é recusado, não gravado em silêncio', async () => {
+      mockPrismaService.property.findUnique.mockResolvedValue(currentSaleProperty());
+
+      await expect(
+        service.update('prop-1', { price: null } as unknown as UpdatePropertyDto),
+      ).rejects.toThrow(InvalidBusinessTypeConfigError);
+      expect(mockPrismaService.property.update).not.toHaveBeenCalled();
+    });
+
+    it('limpar o totalArea de um LAND é recusado', async () => {
+      mockPrismaService.property.findUnique.mockResolvedValue(
+        currentSaleProperty({ type: PropertyType.LAND, totalArea: 500 }),
+      );
+
+      await expect(
+        service.update('prop-1', { totalArea: null } as unknown as UpdatePropertyDto),
+      ).rejects.toThrow(InvalidSubtypeDataError);
+    });
+
+    // O outro lado da mesma conta: com `??`, limpar o condomínio era recusado por
+    // causa do próprio valor que estava sendo removido.
+    it('limpar o condoFee é aceito mesmo quando o valor antigo superaria o novo preço', async () => {
+      mockPrismaService.property.findUnique.mockResolvedValue(
+        currentSaleProperty({ condoFee: { toString: () => '900.00' } }),
+      );
+      mockPrismaService.$transaction.mockResolvedValue({ neighborhoodId: 'n-1' });
+
+      await expect(
+        service.update('prop-1', {
+          price: '500.00',
+          condoFee: null,
+        } as unknown as UpdatePropertyDto),
+      ).resolves.toBeDefined();
+    });
+  });
+
   describe('validateApartmentAreaFields (via update)', () => {
     it('enviar builtArea para uma propriedade APARTMENT existente lança InvalidSubtypeDataError', async () => {
       mockPrismaService.property.findUnique.mockResolvedValue({
@@ -397,6 +519,80 @@ describe('PropertiesService', () => {
         where: { id: 'prop-1' },
         data: { status: PropertyStatus.ACTIVE },
       });
+    });
+  });
+
+  describe('remove — idempotência do soft delete', () => {
+    it('deleta um imóvel ativo: move as imagens e grava deletedAt', async () => {
+      mockPrismaService.property.findUnique.mockResolvedValue({ id: 'prop-1', deletedAt: null });
+      mockPrismaService.property.update.mockResolvedValue({ id: 'prop-1', deletedAt: new Date() });
+
+      await service.remove('prop-1');
+
+      expect(mockPropertyImagesService.movePropertyImagesToDeleted).toHaveBeenCalledWith('prop-1');
+      expect(mockPrismaService.property.update).toHaveBeenCalled();
+    });
+
+    // Repetir o DELETE movia as imagens de novo — sobre chaves que já estavam em
+    // `deleted/`, produzindo `deleted/{id}/{id}/{uuid}.jpg` — e regravava o
+    // `deletedAt`, reiniciando o prazo de 30 dias de retenção.
+    it('deletar de novo não repete efeito nenhum', async () => {
+      const jaDeletado = { id: 'prop-1', deletedAt: new Date('2026-01-01') };
+      mockPrismaService.property.findUnique.mockResolvedValue(jaDeletado);
+
+      const resultado = await service.remove('prop-1');
+
+      expect(resultado).toBe(jaDeletado);
+      expect(mockPropertyImagesService.movePropertyImagesToDeleted).not.toHaveBeenCalled();
+      expect(mockPrismaService.property.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findDeleted — a lixeira', () => {
+    it('busca só o que tem deletedAt, do mais recente para o mais antigo', async () => {
+      mockPrismaService.property.findMany.mockResolvedValue([]);
+      mockPrismaService.property.count.mockResolvedValue(0);
+
+      await service.findDeleted();
+
+      const args = mockPrismaService.property.findMany.mock.calls[0][0];
+      expect(args.where).toEqual({ deletedAt: { not: null } });
+      expect(args.orderBy).toEqual({ deletedAt: 'desc' });
+    });
+
+    // A listagem normal é auth-aware e atende anônimo; a lixeira é rota separada
+    // justamente para não haver parâmetro capaz de ampliar o escopo por lá.
+    it('devolve deletedAt no card, que é o que permite mostrar o prazo restante', async () => {
+      const excluidoEm = new Date('2026-08-01');
+      mockPrismaService.property.findMany.mockResolvedValue([
+        {
+          id: 'prop-1',
+          code: '0001',
+          type: 'LAND',
+          businessType: 'SALE',
+          status: 'PENDING',
+          price: null,
+          rentPrice: null,
+          deletedAt: excluidoEm,
+          createdAt: new Date('2026-07-01'),
+          condoFee: null,
+          neighborhood: { displayName: 'Centro', city: 'São Paulo', state: 'SP' },
+          bedrooms: null,
+          suites: null,
+          bathrooms: null,
+          parkingSpaces: null,
+          totalArea: 500,
+          builtArea: null,
+          rooms: [],
+          images: [],
+        },
+      ]);
+      mockPrismaService.property.count.mockResolvedValue(1);
+
+      const resultado = await service.findDeleted();
+
+      expect(resultado.data[0].deletedAt).toBe(excluidoEm);
+      expect(resultado.total).toBe(1);
     });
   });
 

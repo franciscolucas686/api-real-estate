@@ -7,15 +7,37 @@ datasource db {
 }
 
 model User {
-  id                    String     @id @default(uuid())
-  email                 String     @unique
-  password              String
-  name                  String?
-  createdAt             DateTime   @default(now())
-  updatedAt             DateTime   @updatedAt
-  refreshToken          String?
-  refreshTokenExpiresAt DateTime?
-  properties            Property[]
+  id         String     @id @default(uuid())
+  email      String     @unique
+  password   String
+  name       String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  properties Property[]
+  sessions   Session[]
+}
+
+/// Uma linha por dispositivo logado.
+///
+/// Substituiu as colunas `refreshToken` / `refreshTokenExpiresAt` do `User`, que guardavam
+/// **uma** sessão por usuário: quem rotacionasse por último derrubava todos os outros
+/// dispositivos, de forma determinística e a cada ~15 minutos.
+///
+/// Guarda-se o SHA-256 do token, nunca o token: um dump do banco entregava sessões
+/// utilizáveis por até 7 dias. SHA-256 e não bcrypt porque o valor já é um JWT de alta
+/// entropia — não há dicionário a proteger, e bcrypt custaria em toda rotação.
+model Session {
+  id               String   @id @default(uuid())
+  userId           String
+  refreshTokenHash String
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+  lastUsedAt       DateTime @default(now())
+  userAgent        String?
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model SiteSettings {

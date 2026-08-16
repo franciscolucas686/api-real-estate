@@ -1,5 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PropertyStatus } from '@prisma/client';
+import {
+  ImageNotBelongToPropertyError,
+  InvalidImageFileError,
+  PropertyNotFoundError,
+  RoomNotBelongToPropertyError,
+} from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../r2/r2.service';
 import { PropertyImagesService } from './property-images.service';
@@ -36,6 +42,7 @@ describe('PropertyImagesService', () => {
     },
     propertyRoom: {
       findMany: jest.fn(),
+      findUnique: jest.fn(),
     },
     $transaction: jest.fn(),
   };
@@ -79,7 +86,7 @@ describe('PropertyImagesService', () => {
       mockPrismaService.propertyImage.count.mockResolvedValue(2);
       mockR2Service.getObjectKeyFromUrl.mockReturnValue('prop-1/foo.jpg');
 
-      await service.deleteImage('img-1', 'user-1');
+      await service.deleteImage('prop-1', 'img-1');
 
       expect(mockPrismaService.property.update).toHaveBeenCalledWith({
         where: { id: 'prop-1' },
@@ -100,7 +107,7 @@ describe('PropertyImagesService', () => {
       mockPrismaService.propertyImage.count.mockResolvedValue(0);
       mockR2Service.getObjectKeyFromUrl.mockReturnValue('prop-1/foo.jpg');
 
-      await service.deleteImage('img-1', 'user-1');
+      await service.deleteImage('prop-1', 'img-1');
 
       expect(mockPrismaService.property.update).toHaveBeenCalledWith({
         where: { id: 'prop-1' },
@@ -121,7 +128,7 @@ describe('PropertyImagesService', () => {
       mockPrismaService.propertyImage.count.mockResolvedValue(3);
       mockR2Service.getObjectKeyFromUrl.mockReturnValue('prop-1/foo.jpg');
 
-      await service.deleteImage('img-1', 'user-1');
+      await service.deleteImage('prop-1', 'img-1');
 
       expect(mockPrismaService.property.update).not.toHaveBeenCalled();
     });
@@ -139,7 +146,7 @@ describe('PropertyImagesService', () => {
       mockPrismaService.propertyImage.count.mockResolvedValue(0);
       mockR2Service.getObjectKeyFromUrl.mockReturnValue('prop-1/foo.jpg');
 
-      await service.deleteImage('img-1', 'user-1');
+      await service.deleteImage('prop-1', 'img-1');
 
       expect(mockPrismaService.property.update).not.toHaveBeenCalled();
     });
@@ -172,6 +179,37 @@ describe('PropertyImagesService', () => {
       expect(result.images).toBe(insertedData);
     });
 
+    // A compressão e o upload já estiveram no mesmo método, um arquivo por vez. Um
+    // arquivo inválido no meio do lote rejeitava o Promise.all, o createMany nunca
+    // rodava, e as fotos que já haviam subido ficavam no bucket sem linha no banco.
+    it('não sobe nada ao R2 quando um arquivo do lote não é imagem válida', async () => {
+      mockPrismaService.propertyImage.findFirst.mockResolvedValue(null);
+
+      const sharpMock = jest.requireMock('sharp') as jest.Mock;
+      sharpMock
+        .mockReturnValueOnce({
+          rotate: jest.fn().mockReturnThis(),
+          resize: jest.fn().mockReturnThis(),
+          jpeg: jest.fn().mockReturnThis(),
+          toBuffer: jest.fn().mockResolvedValue(Buffer.from('ok')),
+        })
+        .mockReturnValueOnce({
+          rotate: jest.fn().mockReturnThis(),
+          resize: jest.fn().mockReturnThis(),
+          jpeg: jest.fn().mockReturnThis(),
+          toBuffer: jest
+            .fn()
+            .mockRejectedValue(new Error('Input buffer contains unsupported image format')),
+        });
+
+      await expect(
+        service.uploadImages('prop-1', [makeFile('boa'), makeFile('pdf-disfarcado')]),
+      ).rejects.toThrow(InvalidImageFileError);
+
+      expect(mockR2Service.uploadImage).not.toHaveBeenCalled();
+      expect(mockPrismaService.propertyImage.createMany).not.toHaveBeenCalled();
+    });
+
     it('ativa a propriedade se ela estava PENDING', async () => {
       mockPrismaService.propertyImage.findFirst.mockResolvedValue(null);
       mockR2Service.uploadImage.mockResolvedValue('https://bucket/prop-1/a.jpg');
@@ -199,6 +237,70 @@ describe('PropertyImagesService', () => {
       await service.uploadImages('prop-1', [makeFile('a')]);
 
       expect(mockPrismaService.property.update).not.toHaveBeenCalled();
+    });
+
+    // O destino era conferido só pelo `createMany`, ou seja, depois de todos os PUTs:
+    // um propertyId inexistente virava violação de FK e deixava as fotos no bucket sem
+    // linha no banco — invisíveis e sem rotina que as recolha.
+    it('não sobe nada ao R2 quando a propriedade não existe', async () => {
+      mockPrismaService.propertyImage.findFirst.mockResolvedValue(null);
+      mockPrismaService.property.findUnique.mockResolvedValue(null);
+
+      await expect(service.uploadImages('prop-inexistente', [makeFile('a')])).rejects.toThrow(
+        PropertyNotFoundError,
+      );
+
+      expect(mockR2Service.uploadImage).not.toHaveBeenCalled();
+      expect(mockPrismaService.propertyImage.createMany).not.toHaveBeenCalled();
+    });
+
+    // O roomId vem do corpo, não da rota: a FK aceita o cômodo de outro imóvel porque
+    // o id existe, e a foto passava a aparecer na galeria dos dois.
+    it('recusa um roomId que pertence a outro imóvel, antes de subir', async () => {
+      mockPrismaService.propertyImage.findFirst.mockResolvedValue(null);
+      mockPrismaService.property.findUnique.mockResolvedValue({ id: 'prop-1' });
+      mockPrismaService.propertyRoom.findUnique.mockResolvedValue({ propertyId: 'prop-2' });
+
+      await expect(
+        service.uploadImages('prop-1', [makeFile('a')], 'room-de-outro'),
+      ).rejects.toThrow(RoomNotBelongToPropertyError);
+
+      expect(mockR2Service.uploadImage).not.toHaveBeenCalled();
+      expect(mockPrismaService.propertyImage.createMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteImage — o propertyId da rota é conferido', () => {
+    it('recusa apagar uma foto que pertence a outro imóvel, sem tocar no R2', async () => {
+      mockPrismaService.propertyImage.findUnique.mockResolvedValue({
+        id: 'img-1',
+        propertyId: 'prop-2',
+        url: 'https://bucket/prop-2/foo.jpg',
+      });
+
+      await expect(service.deleteImage('prop-1', 'img-1')).rejects.toThrow(
+        ImageNotBelongToPropertyError,
+      );
+
+      expect(mockR2Service.deleteImage).not.toHaveBeenCalled();
+      expect(mockPrismaService.propertyImage.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('bulkDeleteImages', () => {
+    // Engolir esta falha devolvia 204 com os objetos já apagados do R2 e as linhas
+    // ainda no banco: a galeria sumia da tela e voltava quebrada no reload.
+    it('propaga a falha do banco em vez de responder sucesso', async () => {
+      mockPrismaService.propertyImage.findMany.mockResolvedValue([
+        { id: 'img-1', propertyId: 'prop-1', url: 'https://bucket/prop-1/a.jpg' },
+      ]);
+      mockR2Service.getObjectKeyFromUrl.mockReturnValue('prop-1/a.jpg');
+      mockR2Service.deleteImages.mockResolvedValue(undefined);
+      mockPrismaService.propertyImage.deleteMany.mockRejectedValue(new Error('conexão perdida'));
+
+      await expect(service.bulkDeleteImages('prop-1', { imageIds: ['img-1'] })).rejects.toThrow(
+        'conexão perdida',
+      );
     });
   });
 });
