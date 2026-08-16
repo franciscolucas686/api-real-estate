@@ -10,6 +10,7 @@ import {
   SaleType,
 } from '@prisma/client';
 import {
+  IncompleteLocationUpdateError,
   InvalidBusinessTypeConfigError,
   InvalidSubtypeDataError,
   PropertyNotDeletedError,
@@ -36,6 +37,82 @@ import {
 import { PropertyImagesService } from './property-images.service';
 
 const PREVIEW_LIMIT_ROOMS = 4;
+
+/**
+ * Colunas de um card de listagem, compartilhadas pela busca pública e pela lixeira.
+ *
+ * `suites`, `totalArea`, `builtArea`, `condoFee` e `createdAt` estão aqui de propósito
+ * — ver o comentário em `property-card.dto.ts`: existem para uma listagem densa poder
+ * ser renderizada sem uma segunda requisição por linha. O tipo do frontend não os
+ * declarava, e foi ele que passou a declará-los, não o contrário.
+ *
+ * `deletedAt` entrou para a lixeira, que precisa mostrar quanto resta dos 30 dias de
+ * retenção. Nas listagens normais é sempre `null`.
+ */
+const PROPERTY_CARD_SELECT = {
+  id: true,
+  code: true,
+  type: true,
+  businessType: true,
+  status: true,
+  price: true,
+  rentPrice: true,
+  deletedAt: true,
+  createdAt: true,
+  condoFee: true,
+  neighborhood: {
+    select: { displayName: true, city: true, state: true },
+  },
+  bedrooms: true,
+  suites: true,
+  bathrooms: true,
+  parkingSpaces: true,
+  totalArea: true,
+  builtArea: true,
+  rooms: {
+    orderBy: { order: 'asc' },
+    take: PREVIEW_LIMIT_ROOMS,
+    select: {
+      images: {
+        orderBy: { order: 'asc' },
+        take: 1,
+        select: { id: true, url: true },
+      },
+    },
+  },
+  images: {
+    where: { roomId: null },
+    orderBy: { createdAt: 'asc' },
+    take: PREVIEW_LIMIT_ROOMS,
+    select: { id: true, url: true },
+  },
+} satisfies Prisma.PropertySelect;
+
+type PropertyCardRow = Prisma.PropertyGetPayload<{ select: typeof PROPERTY_CARD_SELECT }>;
+
+/**
+ * Valor que a coluna terá depois do `update` — o enviado quando o campo veio no corpo,
+ * o atual quando não veio.
+ *
+ * **`??` não serve aqui, e a diferença é uma regra de negócio furada.** O
+ * `@IsOptional()` do class-validator trata `null` como ausência, então um `null`
+ * explícito atravessa a validação de forma e chega ao Prisma, que grava. Com `??` a
+ * validação condicional lia o valor **antigo** e aprovava: `PATCH { "price": null }`
+ * num imóvel `SALE` zerava o preço sem que "venda exige preço" fosse checada, e
+ * `{ "totalArea": null }` num `LAND` fazia o mesmo com a área obrigatória. No outro
+ * sentido a conta também errava — limpar `condoFee` era recusado por causa do valor
+ * que estava sendo removido, e um `PATCH` que converte um imóvel em `LAND` limpando
+ * `bedrooms` era recusado pelos quartos que ele mesmo estava apagando.
+ *
+ * Só `undefined` significa "não mexeu".
+ */
+function effectiveValue<T>(
+  sent: T | null | undefined,
+  current: T | null | undefined,
+): T | undefined {
+  if (sent === undefined) return current ?? undefined;
+  return sent ?? undefined;
+}
 
 /**
  * Maps a `sort` value onto Prisma's `orderBy`.
@@ -446,88 +523,85 @@ export class PropertiesService {
         take,
         where,
         orderBy,
-        select: {
-          id: true,
-          code: true,
-          type: true,
-          businessType: true,
-          status: true,
-          price: true,
-          rentPrice: true,
-          neighborhood: {
-            select: { displayName: true, city: true, state: true },
-          },
-          bedrooms: true,
-          suites: true,
-          bathrooms: true,
-          parkingSpaces: true,
-          totalArea: true,
-          builtArea: true,
-          condoFee: true,
-          createdAt: true,
-          rooms: {
-            orderBy: { order: 'asc' },
-            take: PREVIEW_LIMIT_ROOMS,
-            select: {
-              images: {
-                orderBy: { order: 'asc' },
-                take: 1,
-                select: {
-                  id: true,
-                  url: true,
-                },
-              },
-            },
-          },
-          images: {
-            where: { roomId: null },
-            orderBy: { createdAt: 'asc' },
-            take: PREVIEW_LIMIT_ROOMS,
-            select: {
-              id: true,
-              url: true,
-            },
-          },
-        },
+        select: PROPERTY_CARD_SELECT,
       }),
       this.prisma.property.count({ where }),
     ]);
 
-    const data: PropertyCardDto[] = properties.map((property) => {
-      const roomImages = property.rooms
-        .filter((room) => room.images.length > 0)
-        .map((room) => ({
-          id: room.images[0].id,
-          url: room.images[0].url,
-        }));
+    return {
+      data: properties.map((property) => this.toCardDto(property)),
+      total,
+      skip,
+      take,
+    };
+  }
 
-      const previewImages = roomImages.length > 0 ? roomImages : property.images;
-
-      return {
-        id: property.id,
-        code: property.code,
-        type: property.type,
-        businessType: property.businessType,
-        status: property.status,
-        price: property.price?.toString() ?? null,
-        rentPrice: property.rentPrice?.toString() ?? null,
-        city: property.neighborhood.city,
-        state: property.neighborhood.state,
-        neighborhood: property.neighborhood.displayName,
-        bedrooms: property.bedrooms,
-        bathrooms: property.bathrooms,
-        parkingSpaces: property.parkingSpaces,
-        suites: property.suites,
-        totalArea: property.totalArea,
-        builtArea: property.builtArea,
-        condoFee: property.condoFee?.toString() ?? null,
-        createdAt: property.createdAt,
-        previewImages,
-      };
-    });
+  /** Linha do banco → card. Compartilhado entre a listagem pública e a lixeira. */
+  private toCardDto(property: PropertyCardRow): PropertyCardDto {
+    const roomImages = property.rooms
+      .filter((room) => room.images.length > 0)
+      .map((room) => ({
+        id: room.images[0].id,
+        url: room.images[0].url,
+      }));
 
     return {
-      data,
+      id: property.id,
+      code: property.code,
+      type: property.type,
+      businessType: property.businessType,
+      status: property.status,
+      price: property.price?.toString() ?? null,
+      rentPrice: property.rentPrice?.toString() ?? null,
+      city: property.neighborhood.city,
+      state: property.neighborhood.state,
+      neighborhood: property.neighborhood.displayName,
+      bedrooms: property.bedrooms,
+      bathrooms: property.bathrooms,
+      parkingSpaces: property.parkingSpaces,
+      suites: property.suites,
+      totalArea: property.totalArea,
+      builtArea: property.builtArea,
+      condoFee: property.condoFee?.toString() ?? null,
+      createdAt: property.createdAt,
+      deletedAt: property.deletedAt,
+      previewImages: roomImages.length > 0 ? roomImages : property.images,
+    };
+  }
+
+  /**
+   * Imóveis na lixeira — **tudo** que está soft-deleted, sem recortar pelos 30 dias.
+   *
+   * O recorte seria redundante na operação normal (o job das 03:00 apaga o que
+   * venceu) e ativamente nocivo quando ele falha: um imóvel vencido mas ainda no
+   * banco continua restaurável, e escondê-lo tiraria a última chance de fazê-lo
+   * exatamente no dia em que ela importa. Quem calcula o prazo restante é o cliente,
+   * a partir do `deletedAt` que vai no card.
+   *
+   * Rota própria, e não um filtro em `findAll`, de propósito: aquela é auth-aware e
+   * atende visitante anônimo, então qualquer parâmetro que amplie o escopo ali é uma
+   * chance de vazar inventário. Aqui o `JwtGuard` do controller torna isso impossível
+   * por construção.
+   *
+   * Ordena pelo mais recentemente excluído, que é a ordem em que se procura algo
+   * apagado por engano.
+   */
+  async findDeleted(skip = 0, take = 20): Promise<PropertyListResponseDto> {
+    const where = { deletedAt: { not: null } };
+
+    const [properties, total] = await Promise.all([
+      this.prisma.property.findMany({
+        skip,
+        take,
+        where,
+        orderBy: { deletedAt: 'desc' },
+        select: PROPERTY_CARD_SELECT,
+      }),
+      this.prisma.property.count({ where }),
+    ]);
+
+    return {
+      data: properties.map((property) => this.toCardDto(property)),
       total,
       skip,
       take,
@@ -789,47 +863,41 @@ export class PropertiesService {
 
       const newBusinessType = propertyData.businessType ?? currentProperty.businessType;
       const effectiveSaleTypes = saleTypes ?? currentProperty.saleTypes.map((st) => st.type);
-      const effectivePrice = propertyData.price ?? currentProperty.price?.toString();
-      const effectiveRentPrice = propertyData.rentPrice ?? currentProperty.rentPrice?.toString();
-      const effectiveCondoFee = propertyData.condoFee ?? currentProperty.condoFee?.toString();
       this.validateBusinessTypeConfig(
         newBusinessType,
         effectiveSaleTypes,
-        effectivePrice,
-        effectiveRentPrice,
-        effectiveCondoFee,
+        effectiveValue(propertyData.price, currentProperty.price?.toString()),
+        effectiveValue(propertyData.rentPrice, currentProperty.rentPrice?.toString()),
+        effectiveValue(propertyData.condoFee, currentProperty.condoFee?.toString()),
       );
 
       if (hasSuitesOrBathroomsUpdate) {
-        const effectiveSuites = propertyData.suites ?? currentProperty.suites;
-        const effectiveBathrooms = propertyData.bathrooms ?? currentProperty.bathrooms;
-        this.validateSuites(effectiveSuites, effectiveBathrooms);
+        this.validateSuites(
+          effectiveValue(propertyData.suites, currentProperty.suites),
+          effectiveValue(propertyData.bathrooms, currentProperty.bathrooms),
+        );
       }
 
       if (hasLandFieldsUpdate) {
         const effectiveType = propertyData.type ?? currentProperty.type;
+        const effectiveAreas = {
+          builtArea: effectiveValue(propertyData.builtArea, currentProperty.builtArea),
+          totalArea: effectiveValue(propertyData.totalArea, currentProperty.totalArea),
+        };
         this.validateLandFields(effectiveType, {
-          bedrooms: propertyData.bedrooms ?? currentProperty.bedrooms,
-          bathrooms: propertyData.bathrooms ?? currentProperty.bathrooms,
-          suites: propertyData.suites ?? currentProperty.suites,
-          parkingSpaces: propertyData.parkingSpaces ?? currentProperty.parkingSpaces,
-          builtArea: propertyData.builtArea ?? currentProperty.builtArea,
-          totalArea: propertyData.totalArea ?? currentProperty.totalArea,
+          bedrooms: effectiveValue(propertyData.bedrooms, currentProperty.bedrooms),
+          bathrooms: effectiveValue(propertyData.bathrooms, currentProperty.bathrooms),
+          suites: effectiveValue(propertyData.suites, currentProperty.suites),
+          parkingSpaces: effectiveValue(propertyData.parkingSpaces, currentProperty.parkingSpaces),
+          ...effectiveAreas,
         });
-        this.validateApartmentAreaFields(effectiveType, {
-          builtArea: propertyData.builtArea ?? currentProperty.builtArea,
-          totalArea: propertyData.totalArea ?? currentProperty.totalArea,
-        });
+        this.validateApartmentAreaFields(effectiveType, effectiveAreas);
       }
     }
 
-    // Validate location update: all 3 fields required together
-    if (hasLocationUpdate) {
-      if (!neighborhood || !city || !state) {
-        throw new Error(
-          'Para atualizar a localização, informe todos os campos: neighborhood, city e state',
-        );
-      }
+    // Os três campos viajam juntos — ver IncompleteLocationUpdateError.
+    if (hasLocationUpdate && (!neighborhood || !city || !state)) {
+      throw new IncompleteLocationUpdateError();
     }
 
     try {
@@ -969,7 +1037,10 @@ export class PropertiesService {
   }
 
   async hardDelete(id: string): Promise<void> {
-    const property = await this.prisma.property.findUnique({ where: { id } });
+    const property = await this.prisma.property.findUnique({
+      where: { id },
+      select: { id: true },
+    });
 
     if (!property) {
       throw new PropertyNotFoundError(id);
@@ -979,7 +1050,7 @@ export class PropertiesService {
     await this.prisma.property.delete({ where: { id } });
   }
 
-  async remove(id: string, userId: string) {
+  async remove(id: string) {
     const property = await this.prisma.property.findUnique({
       where: { id },
     });

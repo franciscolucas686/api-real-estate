@@ -73,12 +73,22 @@ export class PropertyNotDeletedError extends DomainError {
   }
 }
 
-export class PropertyForbiddenError extends DomainError {
-  readonly statusCode = HttpStatus.FORBIDDEN;
-  readonly code = 'PROPERTY_FORBIDDEN';
+/**
+ * Localização é um trio: bairro, cidade e estado viajam juntos porque o backend os
+ * resolve num único `connectOrCreate` de `Neighborhood`. Atualizar só um deles pediria
+ * ler os outros dois do registro atual e recriar o bairro a partir de uma mistura —
+ * silenciosamente mudando o imóvel de bairro em metade dos casos.
+ *
+ * Existe como erro de domínio (400) porque era um `throw new Error` cru, que o
+ * `AllExceptionsFilter` traduzia para 500 "Erro interno do servidor": erro do chamador
+ * relatado como falha do servidor, sem `code` para o frontend traduzir.
+ */
+export class IncompleteLocationUpdateError extends DomainError {
+  readonly statusCode = HttpStatus.BAD_REQUEST;
+  readonly code = 'INCOMPLETE_LOCATION_UPDATE';
 
-  constructor(id: string) {
-    super(`Você não tem permissão para modificar a propriedade ${id}`);
+  constructor() {
+    super('Para atualizar a localização, informe neighborhood, city e state juntos');
   }
 }
 

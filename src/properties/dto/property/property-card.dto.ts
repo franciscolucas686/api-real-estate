@@ -80,6 +80,17 @@ export class PropertyCardDto {
   })
   createdAt!: Date;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Quando o imóvel foi movido para a lixeira. Sempre null nas listagens normais — ' +
+      'só a rota GET /properties/trash devolve cards com valor aqui, e é a partir dele ' +
+      'que se calcula quanto resta dos 30 dias de retenção.',
+    example: '2026-08-01T00:00:00.000Z',
+  })
+  deletedAt!: Date | null;
+
   @ApiProperty({ type: [PreviewImageDto] })
   previewImages!: PreviewImageDto[];
 }

@@ -22,6 +22,7 @@ import {
   ApiOperation,
   ApiParam,
   ApiResponse,
+  ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
@@ -36,7 +37,9 @@ import {
   CreatePropertyDto,
   CreatePropertyRoomDto,
   FilterPropertyDto,
+  PropertyListResponseDto,
   ReorderPropertyImagesDto,
+  TrashPaginationDto,
   UpdatePropertyDto,
   UpdatePropertyRoomDto,
   UpdatePropertyStatusDto,
@@ -123,6 +126,31 @@ export class PropertiesController {
     return { [PropertyStatus.ACTIVE]: counts[PropertyStatus.ACTIVE] };
   }
 
+  // Declarada antes de @Get(':id') porque a primeira rota que casa vence, e 'trash'
+  // seria capturado como id — o ParseUUIDPipe rejeitaria com 400 em vez de chegar aqui.
+  @Get('trash')
+  @UseGuards(JwtGuard)
+  @ApiSecurity('cookie')
+  @ApiOperation({
+    summary: 'Lista os imóveis na lixeira',
+    description:
+      'Imóveis excluídos (soft delete), do mais recentemente excluído para o mais antigo. ' +
+      'Depois de 30 dias o job diário os remove em definitivo, junto com as fotos no R2 — ' +
+      'o prazo restante é calculado pelo cliente a partir de `deletedAt`, e um imóvel ' +
+      'vencido que o job ainda não recolheu continua listado (e restaurável) de propósito. ' +
+      'Rota separada da listagem normal: aquela atende visitante anônimo, e um parâmetro ' +
+      'que ampliasse o escopo por lá seria uma chance de vazar inventário.',
+  })
+  @ApiResponse({
+    status: 200,
+    type: PropertyListResponseDto,
+    description: 'Página de imóveis excluídos, com deletedAt preenchido',
+  })
+  @ApiResponse({ status: 401, description: 'Não autenticado' })
+  async findTrash(@Query() pagination: TrashPaginationDto) {
+    return this.propertiesService.findDeleted(pagination.skip, pagination.take);
+  }
+
   @Post()
   @HttpCode(201)
   @UseGuards(JwtGuard)
@@ -185,7 +213,6 @@ export class PropertiesController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updatePropertyDto: UpdatePropertyDto,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     return this.propertiesService.update(id, updatePropertyDto);
   }
@@ -200,8 +227,8 @@ export class PropertiesController {
   @ApiResponse({ status: 204, description: 'Propriedade deletada' })
   @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: CurrentUserDto) {
-    await this.propertiesService.remove(id, user.id);
+  async remove(@Param('id', ParseUUIDPipe) id: string) {
+    await this.propertiesService.remove(id);
   }
 
   @Patch(':id/restore')
@@ -281,7 +308,6 @@ export class PropertiesController {
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @UploadedFiles() files: Express.Multer.File[],
     @Body('roomId') roomId: string | undefined,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     if (!files?.length) {
       throw new PropertyImageFileMissingError();
@@ -307,7 +333,6 @@ export class PropertiesController {
   async bulkDeleteImages(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @Body() dto: BulkDeletePropertyImagesDto,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     await this.propertyImagesService.bulkDeleteImages(propertyId, dto);
   }
@@ -325,9 +350,8 @@ export class PropertiesController {
   async deleteImage(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @Param('imageId', ParseUUIDPipe) imageId: string,
-    @CurrentUser() user: CurrentUserDto,
   ) {
-    await this.propertyImagesService.deleteImage(imageId, user.id);
+    await this.propertyImagesService.deleteImage(propertyId, imageId);
   }
 
   // === ROOM ENDPOINTS ===
@@ -345,7 +369,6 @@ export class PropertiesController {
   async createRoom(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @Body() dto: CreatePropertyRoomDto,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     return this.propertyRoomsService.createRoom(propertyId, dto);
   }
@@ -364,7 +387,6 @@ export class PropertiesController {
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @Param('roomId', ParseUUIDPipe) roomId: string,
     @Body() dto: UpdatePropertyRoomDto,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     return this.propertyRoomsService.updateRoom(propertyId, roomId, dto);
   }
@@ -382,7 +404,6 @@ export class PropertiesController {
   async deleteRoom(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @Param('roomId', ParseUUIDPipe) roomId: string,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     await this.propertyRoomsService.deleteRoom(propertyId, roomId);
   }
@@ -400,7 +421,6 @@ export class PropertiesController {
   async reorderImages(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @Body() dto: ReorderPropertyImagesDto,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     return this.propertyImagesService.reorderImages(propertyId, dto);
   }

@@ -11,11 +11,11 @@ export {
 export {
   ImageNotBelongToPropertyError,
   ImageNotFoundError,
+  IncompleteLocationUpdateError,
   InvalidBusinessTypeConfigError,
   InvalidImageFileError,
   InvalidStatusTransitionError,
   InvalidSubtypeDataError,
-  PropertyForbiddenError,
   PropertyImageFileMissingError,
   PropertyNotDeletedError,
   PropertyNotFoundError,

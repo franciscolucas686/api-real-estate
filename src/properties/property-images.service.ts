@@ -7,14 +7,13 @@ import {
   ImageNotBelongToPropertyError,
   ImageNotFoundError,
   InvalidImageFileError,
+  PropertyNotFoundError,
+  RoomNotBelongToPropertyError,
+  RoomNotFoundError,
 } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../r2/r2.service';
-import {
-  BulkDeletePropertyImagesDto,
-  ReorderPropertyImagesDto,
-  UpdatePropertyImageDto,
-} from './dto';
+import { BulkDeletePropertyImagesDto, ReorderPropertyImagesDto } from './dto';
 
 // Cada imagem só é processada uma vez (sem reaproveitamento), então o cache
 // interno do sharp não traz benefício e só consome memória; e com a
@@ -48,10 +47,40 @@ export class PropertyImagesService {
     images: PropertyImage[];
     total: number;
   }> {
-    const lastImage = await this.prisma.propertyImage.findFirst({
-      where: { propertyId },
-      orderBy: { order: 'desc' },
-    });
+    // Destino conferido **antes** do primeiro PUT, no mesmo ida-e-volta do `order`.
+    //
+    // Sem isto o método subia tudo e só descobria o problema no `createMany`: um
+    // `propertyId` inexistente virava violação de FK — 500 para o operador e fotos no
+    // bucket sem linha no banco, invisíveis e sem rotina que as recolha, multiplicadas
+    // a cada nova tentativa. É o mesmo vazamento que separar compressão de upload
+    // fechou para arquivo inválido, entrando pela outra porta.
+    //
+    // O `roomId` é conferido junto porque ele vem do corpo, não da rota: um cômodo de
+    // outro imóvel passava direto pela FK (o id existe) e anexava a foto à galeria
+    // errada, onde ela aparece para os dois imóveis.
+    const [lastImage, property, room] = await Promise.all([
+      this.prisma.propertyImage.findFirst({
+        where: { propertyId },
+        orderBy: { order: 'desc' },
+        select: { order: true },
+      }),
+      this.prisma.property.findUnique({ where: { id: propertyId }, select: { id: true } }),
+      roomId
+        ? this.prisma.propertyRoom.findUnique({
+            where: { id: roomId },
+            select: { propertyId: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (!property) throw new PropertyNotFoundError(propertyId);
+    if (roomId) {
+      if (!room) throw new RoomNotFoundError(roomId);
+      if (room.propertyId !== propertyId) {
+        throw new RoomNotBelongToPropertyError(roomId, propertyId);
+      }
+    }
+
     const startOrder = (lastImage?.order ?? -1) + 1;
 
     // Comprimir TUDO antes de subir QUALQUER COISA. As duas etapas já estiveram
@@ -82,32 +111,6 @@ export class PropertyImagesService {
       images,
       total: images.length,
     };
-  }
-
-  async updateImage(
-    propertyId: string,
-    imageId: string,
-    dto: Omit<UpdatePropertyImageDto, 'roomId'>,
-  ): Promise<PropertyImage> {
-    const image = await this.prisma.propertyImage.findUnique({
-      where: { id: imageId },
-    });
-
-    if (!image) {
-      throw new ImageNotFoundError(imageId);
-    }
-
-    if (image.propertyId !== propertyId) {
-      throw new ImageNotBelongToPropertyError(imageId, propertyId);
-    }
-
-    return this.prisma.propertyImage.update({
-      where: { id: imageId },
-      data: {
-        ...(dto.label !== undefined && { label: dto.label }),
-        ...(dto.order !== undefined && { order: dto.order }),
-      },
-    });
   }
 
   async reorderImages(propertyId: string, dto: ReorderPropertyImagesDto): Promise<PropertyImage[]> {
@@ -154,13 +157,27 @@ export class PropertyImagesService {
     });
   }
 
-  async deleteImage(imageId: string, userId: string) {
+  /**
+   * O `propertyId` da rota é conferido, não ignorado.
+   *
+   * Ele chegava até aqui como um `userId` que o método nunca lia, então
+   * `DELETE /properties/{qualquer-id}/images/{imageId}` apagava a foto de outro
+   * imóvel — o `imageId` sozinho decidia tudo. Não é escalação de privilégio (esta
+   * API é deliberadamente sem isolamento entre usuários autenticados), mas era a
+   * única rota de foto que discordava de `bulkDeleteImages` e `reorderImages`, que
+   * sempre conferiram: uma tela desatualizada apagava silenciosamente a foto errada.
+   */
+  async deleteImage(propertyId: string, imageId: string) {
     const image = await this.prisma.propertyImage.findUnique({
       where: { id: imageId },
     });
 
     if (!image) {
       throw new ImageNotFoundError(imageId);
+    }
+
+    if (image.propertyId !== propertyId) {
+      throw new ImageNotBelongToPropertyError(imageId, propertyId);
     }
 
     await this.deleteImagesFromR2([image]);
@@ -187,30 +204,30 @@ export class PropertyImagesService {
 
     await this.r2.deleteImages(keys);
 
+    // A falha do banco é registrada **e** propagada. Engoli-la devolvia 204 ao
+    // cliente com os objetos já apagados do R2 e as linhas ainda no banco: a galeria
+    // sumia da tela, e no próximo carregamento as fotos voltavam apontando para
+    // arquivos que não existem mais. Um erro visível é pior de ver e melhor de ter —
+    // o operador tenta de novo, e a segunda tentativa é inofensiva porque apagar do
+    // R2 o que já não está lá não falha.
     try {
       await this.prisma.propertyImage.deleteMany({
         where: { id: { in: dto.imageIds } },
       });
-      await this.syncPropertyStatus(propertyId);
     } catch (error) {
       this.logger.error(
         `R2 deletado mas falha ao remover registros do banco para propertyId=${propertyId}:`,
         error,
       );
+      throw error;
     }
+
+    await this.syncPropertyStatus(propertyId);
   }
 
-  async deleteImagesFromR2(images: PropertyImage[]) {
+  private async deleteImagesFromR2(images: PropertyImage[]) {
     const deletePromises = images.map((image) => this.deleteImageFromR2(image));
     await Promise.allSettled(deletePromises);
-  }
-
-  async deletePropertyImagesFromR2(propertyId: string): Promise<void> {
-    try {
-      await this.r2.deleteObjectsByPrefix(`${propertyId}/`);
-    } catch (error) {
-      this.logger.warn(`Erro ao deletar imagens do imóvel ${propertyId} do R2:`, error);
-    }
   }
 
   async deleteAllPropertyImagesFromR2(propertyId: string): Promise<void> {
