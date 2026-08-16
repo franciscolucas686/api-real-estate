@@ -3,7 +3,11 @@ import { PropertyImage, PropertyStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
 import sharp from 'sharp';
-import { ImageNotBelongToPropertyError, ImageNotFoundError } from '../common/errors';
+import {
+  ImageNotBelongToPropertyError,
+  ImageNotFoundError,
+  InvalidImageFileError,
+} from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../r2/r2.service';
 import {
@@ -50,9 +54,24 @@ export class PropertyImagesService {
     });
     const startOrder = (lastImage?.order ?? -1) + 1;
 
+    // Comprimir TUDO antes de subir QUALQUER COISA. As duas etapas já estiveram
+    // juntas num método só, e aí um arquivo inválido no meio do lote deixava lixo:
+    // o `Promise.all` rejeitava, o `createMany` abaixo nunca rodava, e as fotos que
+    // já haviam subido ficavam no bucket sem linha no banco — invisíveis, e
+    // multiplicadas a cada nova tentativa do operador.
+    //
+    // Separando, a falha mais comum (arquivo que não é imagem) acontece antes do
+    // primeiro PUT, e o lote passa a ser atômico sem precisar de transação.
+    // O pico de memória não muda: o `limit` continua governando as decodificações
+    // simultâneas, que é o que custa caro (~36MB de bitmap cru cada). O que se
+    // acumula a mais são os buffers já comprimidos, ~300KB por foto.
+    const compressed = await Promise.all(
+      files.map((file) => this.limit(() => this.compressImage(file))),
+    );
+
     const images = await Promise.all(
-      files.map((file, index) =>
-        this.limit(() => this.processImage(propertyId, file, startOrder + index, roomId)),
+      compressed.map((buffer, index) =>
+        this.uploadCompressedImage(propertyId, buffer, startOrder + index, roomId),
       ),
     );
 
@@ -271,21 +290,39 @@ export class PropertyImagesService {
   // tamanho mínimo de uma parte multipart é 5MB — bem acima do que uma foto
   // comprimida (1920x1080, JPEG 80%) costuma pesar. Streamar aqui adicionaria uma
   // dependência e complexidade sem reduzir o pico de memória real.
-  private async processImage(
+  //
+  // É a etapa que valida o arquivo de fato: o `fileFilter` do controller olha só o
+  // mimetype declarado pelo cliente, enquanto aqui o libvips precisa realmente
+  // decodificar os bytes. Um arquivo corrompido ou com extensão mentirosa morre
+  // neste ponto — antes de qualquer escrita no R2.
+  private async compressImage(file: Express.Multer.File): Promise<Buffer> {
+    try {
+      return await sharp(file.buffer)
+        .rotate()
+        .resize(1920, 1080, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+    } catch (error) {
+      // Sem isto o erro cru do sharp cai no ramo genérico do AllExceptionsFilter e
+      // vira um 500 "Erro interno do servidor" — que não diz ao operador qual foto
+      // recusou nem por quê.
+      this.logger.warn(
+        `Arquivo rejeitado pelo processamento de imagem: ${file.originalname}`,
+        error,
+      );
+      throw new InvalidImageFileError(file.originalname);
+    }
+  }
+
+  private async uploadCompressedImage(
     propertyId: string,
-    file: Express.Multer.File,
+    compressedBuffer: Buffer,
     order: number,
     roomId?: string,
   ): Promise<PropertyImage> {
-    const compressedBuffer = await sharp(file.buffer)
-      .rotate()
-      .resize(1920, 1080, {
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .jpeg({ quality: 80 })
-      .toBuffer();
-
     const key = `${propertyId}/${randomUUID()}.jpg`;
     const url = await this.r2.uploadImage(compressedBuffer, key, 'image/jpeg');
 

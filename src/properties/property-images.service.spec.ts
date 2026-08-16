@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PropertyStatus } from '@prisma/client';
+import { InvalidImageFileError } from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../r2/r2.service';
 import { PropertyImagesService } from './property-images.service';
@@ -170,6 +171,37 @@ describe('PropertyImagesService', () => {
       );
       expect(result.total).toBe(2);
       expect(result.images).toBe(insertedData);
+    });
+
+    // A compressão e o upload já estiveram no mesmo método, um arquivo por vez. Um
+    // arquivo inválido no meio do lote rejeitava o Promise.all, o createMany nunca
+    // rodava, e as fotos que já haviam subido ficavam no bucket sem linha no banco.
+    it('não sobe nada ao R2 quando um arquivo do lote não é imagem válida', async () => {
+      mockPrismaService.propertyImage.findFirst.mockResolvedValue(null);
+
+      const sharpMock = jest.requireMock('sharp') as jest.Mock;
+      sharpMock
+        .mockReturnValueOnce({
+          rotate: jest.fn().mockReturnThis(),
+          resize: jest.fn().mockReturnThis(),
+          jpeg: jest.fn().mockReturnThis(),
+          toBuffer: jest.fn().mockResolvedValue(Buffer.from('ok')),
+        })
+        .mockReturnValueOnce({
+          rotate: jest.fn().mockReturnThis(),
+          resize: jest.fn().mockReturnThis(),
+          jpeg: jest.fn().mockReturnThis(),
+          toBuffer: jest
+            .fn()
+            .mockRejectedValue(new Error('Input buffer contains unsupported image format')),
+        });
+
+      await expect(
+        service.uploadImages('prop-1', [makeFile('boa'), makeFile('pdf-disfarcado')]),
+      ).rejects.toThrow(InvalidImageFileError);
+
+      expect(mockR2Service.uploadImage).not.toHaveBeenCalled();
+      expect(mockPrismaService.propertyImage.createMany).not.toHaveBeenCalled();
     });
 
     it('ativa a propriedade se ela estava PENDING', async () => {

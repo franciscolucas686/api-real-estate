@@ -14,6 +14,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import type { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
 import { PropertyStatus } from '@prisma/client';
 import {
   ApiBody,
@@ -29,7 +30,7 @@ import { CurrentUserDto } from '../auth/dto/current-user.dto';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 import { OptionalJwtGuard } from '../auth/guards/optional-jwt.guard';
 import { CacheKey, CacheTTL, InvalidateCache } from '../common/decorators/cache.decorator';
-import { PropertyImageFileMissingError } from '../common/errors';
+import { InvalidImageFileError, PropertyImageFileMissingError } from '../common/errors';
 import {
   BulkDeletePropertyImagesDto,
   CreatePropertyDto,
@@ -60,6 +61,24 @@ export const UPLOAD_MAX_FILES_PER_REQUEST = 12;
 
 /** ~15MB cobre foto de celular em resolução máxima com folga; acima disso é anômalo. */
 export const UPLOAD_MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024;
+
+/**
+ * Recusa, pelo mimetype declarado, o que claramente não é imagem.
+ *
+ * **Não é controle de segurança** — o mimetype vem do cliente e pode mentir. Quem
+ * garante que o conteúdo é imagem é o `sharp`, que decodifica e reencoda tudo para
+ * JPEG em `PropertyImagesService.compressImage`; um arquivo com extensão mentirosa
+ * morre lá. Isto aqui é ergonomia e economia: falha na hora, com o nome do arquivo,
+ * antes de bufferizar 15MB de PDF à toa.
+ */
+export const imageFileFilter: MulterOptions['fileFilter'] = (_req, file, callback) => {
+  if (!file.mimetype?.startsWith('image/')) {
+    callback(new InvalidImageFileError(file.originalname), false);
+    return;
+  }
+
+  callback(null, true);
+};
 
 @ApiTags('Properties')
 @Controller('properties')
@@ -229,6 +248,7 @@ export class PropertiesController {
   @UseInterceptors(
     FilesInterceptor('images', UPLOAD_MAX_FILES_PER_REQUEST, {
       limits: { files: UPLOAD_MAX_FILES_PER_REQUEST, fileSize: UPLOAD_MAX_FILE_SIZE_BYTES },
+      fileFilter: imageFileFilter,
     }),
   )
   @ApiConsumes('multipart/form-data')

@@ -108,3 +108,22 @@ export class PropertyImageFileMissingError extends DomainError {
     super('Nenhuma imagem foi enviada');
   }
 }
+
+/**
+ * Arquivo enviado que não é uma imagem decodificável.
+ *
+ * Existe porque o erro cru do `sharp` caía no ramo genérico do `AllExceptionsFilter`
+ * e virava um 500 "Erro interno do servidor" — sem dizer qual arquivo recusou.
+ */
+export class InvalidImageFileError extends DomainError {
+  readonly statusCode = HttpStatus.BAD_REQUEST;
+  readonly code = 'INVALID_IMAGE_FILE';
+
+  constructor(fileName?: string) {
+    super(
+      fileName
+        ? `O arquivo "${fileName}" não é uma imagem válida`
+        : 'O arquivo enviado não é uma imagem válida',
+    );
+  }
+}
