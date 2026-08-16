@@ -460,6 +460,32 @@ describe('PropertiesService', () => {
     });
   });
 
+  describe('remove — idempotência do soft delete', () => {
+    it('deleta um imóvel ativo: move as imagens e grava deletedAt', async () => {
+      mockPrismaService.property.findUnique.mockResolvedValue({ id: 'prop-1', deletedAt: null });
+      mockPrismaService.property.update.mockResolvedValue({ id: 'prop-1', deletedAt: new Date() });
+
+      await service.remove('prop-1', 'user-1');
+
+      expect(mockPropertyImagesService.movePropertyImagesToDeleted).toHaveBeenCalledWith('prop-1');
+      expect(mockPrismaService.property.update).toHaveBeenCalled();
+    });
+
+    // Repetir o DELETE movia as imagens de novo — sobre chaves que já estavam em
+    // `deleted/`, produzindo `deleted/{id}/{id}/{uuid}.jpg` — e regravava o
+    // `deletedAt`, reiniciando o prazo de 30 dias de retenção.
+    it('deletar de novo não repete efeito nenhum', async () => {
+      const jaDeletado = { id: 'prop-1', deletedAt: new Date('2026-01-01') };
+      mockPrismaService.property.findUnique.mockResolvedValue(jaDeletado);
+
+      const resultado = await service.remove('prop-1', 'user-1');
+
+      expect(resultado).toBe(jaDeletado);
+      expect(mockPropertyImagesService.movePropertyImagesToDeleted).not.toHaveBeenCalled();
+      expect(mockPrismaService.property.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('findAll — filtragem de status por autenticação', () => {
     function whereUsed(): Record<string, unknown> {
       const call = mockPrismaService.property.findMany.mock.calls[0] as [

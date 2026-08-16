@@ -988,6 +988,19 @@ export class PropertiesService {
       throw new PropertyNotFoundError(id);
     }
 
+    // Já deletado: devolve como está, sem repetir efeito nenhum.
+    //
+    // Diferente do `restore`, que lança `PropertyNotDeletedError`, e a assimetria é
+    // proposital: DELETE é idempotente por definição em HTTP, e restaurar algo que
+    // não está deletado é um engano que vale mostrar, enquanto deletar o que já está
+    // deletado não é. Repetir tinha dois efeitos indesejados — `movePropertyImagesToDeleted`
+    // rodava de novo sobre chaves que já estavam em `deleted/`, produzindo
+    // `deleted/{id}/{id}/{uuid}.jpg`, e o `deletedAt` era regravado, reiniciando o
+    // prazo de 30 dias de retenção.
+    if (property.deletedAt) {
+      return property;
+    }
+
     await this.propertyImagesService.movePropertyImagesToDeleted(id);
 
     const removed = await this.prisma.property.update({
