@@ -1,5 +1,7 @@
-import { Body, Controller, Post } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { ApiBody, ApiOperation, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { JwtGuard } from '../auth/guards/jwt.guard';
 import {
   ForwardGeocodeDto,
   ForwardGeocodeResponseDto,
@@ -8,8 +10,25 @@ import {
 } from './dto';
 import { GeocodingService } from './geocoding.service';
 
+/**
+ * As duas rotas repassam a chamada ao Nominatim, cuja política de uso é de 1
+ * requisição por segundo **para a aplicação inteira** e cuja punição é bloqueio por
+ * IP. Ficaram abertas por engano — era o único controller do projeto sem guard — o
+ * que fazia desta API um proxy gratuito para ele, com o resultado provável sendo o
+ * IP de saída bloqueado e a criação de imóvel com coordenadas parando junto.
+ *
+ * Fechar não custa nada de funcionalidade: o único consumidor é o seletor de mapa do
+ * formulário de imóvel, que só existe em rotas autenticadas do app.
+ *
+ * O teto por rota também é menor que o padrão de 100/60s, porque aqui o custo de uma
+ * requisição não é nosso: cada uma consome a cota de um serviço de terceiros que
+ * bloqueia o excesso.
+ */
 @ApiTags('geocoding')
 @Controller('geocode')
+@UseGuards(JwtGuard)
+@ApiSecurity('cookie')
+@Throttle({ default: { ttl: 60_000, limit: 20 } })
 export class GeocodingController {
   constructor(private readonly geocodingService: GeocodingService) {}
 
