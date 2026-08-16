@@ -49,7 +49,9 @@ describe('PropertiesService', () => {
     },
   };
 
-  const mockPropertyImagesService = {};
+  const mockPropertyImagesService = {
+    movePropertyImagesToDeleted: jest.fn(),
+  };
   const mockWhatsappService = {};
   const mockEventEmitter = { emit: jest.fn() };
   const mockGeocodingService = { reverseGeocode: jest.fn() };
@@ -125,6 +127,64 @@ describe('PropertiesService', () => {
       expect(mockEventEmitter.emit).toHaveBeenCalledWith('property.saved', {
         neighborhoodId: 'n-1',
       });
+    });
+
+    // A regra existia só no formulário do frontend, então qualquer chamada direta
+    // à API passava por cima dela.
+    it('SALE com condoFee maior que price lança InvalidBusinessTypeConfigError', async () => {
+      const dto = baseDto({
+        businessType: BusinessType.SALE,
+        saleTypes: [SaleType.DIRECT],
+        price: '250000.00',
+        condoFee: '300000.00',
+      });
+
+      await expect(service.create(dto, 'user-1')).rejects.toThrow(InvalidBusinessTypeConfigError);
+    });
+
+    it('RENT compara condoFee com rentPrice, não com price', async () => {
+      mockPrismaService.property.create.mockResolvedValue({ id: 'prop-1', neighborhoodId: 'n-1' });
+
+      // Maior que o rentPrice → rejeita.
+      await expect(
+        service.create(
+          baseDto({
+            businessType: BusinessType.RENT,
+            saleTypes: [],
+            price: undefined,
+            rentPrice: '2000.00',
+            condoFee: '2500.00',
+          }),
+          'user-1',
+        ),
+      ).rejects.toThrow(InvalidBusinessTypeConfigError);
+
+      // Menor que o rentPrice → passa, mesmo sem price nenhum.
+      await expect(
+        service.create(
+          baseDto({
+            businessType: BusinessType.RENT,
+            saleTypes: [],
+            price: undefined,
+            rentPrice: '2000.00',
+            condoFee: '800.00',
+          }),
+          'user-1',
+        ),
+      ).resolves.toMatchObject({ id: 'prop-1' });
+    });
+
+    it('condoFee igual ao preço é aceito — a regra é "maior que"', async () => {
+      mockPrismaService.property.create.mockResolvedValue({ id: 'prop-1', neighborhoodId: 'n-1' });
+
+      const dto = baseDto({
+        businessType: BusinessType.SALE,
+        saleTypes: [SaleType.DIRECT],
+        price: '250000.00',
+        condoFee: '250000.00',
+      });
+
+      await expect(service.create(dto, 'user-1')).resolves.toMatchObject({ id: 'prop-1' });
     });
   });
 

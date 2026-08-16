@@ -110,6 +110,7 @@ export class PropertiesService {
       saleTypes,
       propertyData.price,
       propertyData.rentPrice,
+      propertyData.condoFee,
     );
     this.validateSuites(propertyData.suites, propertyData.bathrooms);
     this.validateLandFields(createPropertyDto.type, {
@@ -290,6 +291,7 @@ export class PropertiesService {
     saleTypes?: SaleType[],
     price?: string,
     rentPrice?: string,
+    condoFee?: string | null,
   ) {
     if (businessType === BusinessType.RENT && saleTypes && saleTypes.length > 0) {
       throw new InvalidBusinessTypeConfigError(
@@ -310,6 +312,43 @@ export class PropertiesService {
     if (businessType === BusinessType.RENT && !rentPrice) {
       throw new InvalidBusinessTypeConfigError(
         'Propriedades de aluguel devem ter um valor de aluguel (rentPrice)',
+      );
+    }
+
+    this.validateCondoFee(businessType, price, rentPrice, condoFee);
+  }
+
+  /**
+   * O condomínio não pode superar o valor de referência do negócio — o aluguel quando
+   * `RENT`, o preço quando `SALE`.
+   *
+   * A regra existia só no formulário (`property.schema.ts`), então qualquer chamada
+   * direta à API a contornava. Mantê-la em um lado só é pior do que não tê-la: dá a
+   * impressão de que o dado está garantido quando não está.
+   *
+   * Comparação em `Number` e não em decimal exato de propósito: os valores já passaram
+   * pelo regex `^\d+(\.\d{1,2})?$` do DTO, e a diferença aqui é sempre de ordem de
+   * grandeza — nenhum arredondamento de ponto flutuante muda o resultado.
+   */
+  private validateCondoFee(
+    businessType: BusinessType,
+    price?: string,
+    rentPrice?: string,
+    condoFee?: string | null,
+  ) {
+    if (!condoFee) return;
+
+    const reference = businessType === BusinessType.RENT ? rentPrice : price;
+    if (!reference) return;
+
+    const referenceValue = Number(reference);
+    if (!(referenceValue > 0)) return;
+
+    if (Number(condoFee) > referenceValue) {
+      throw new InvalidBusinessTypeConfigError(
+        businessType === BusinessType.RENT
+          ? 'O valor do condomínio não pode ser maior que o valor do aluguel'
+          : 'O valor do condomínio não pode ser maior que o preço',
       );
     }
   }
@@ -722,6 +761,7 @@ export class PropertiesService {
       totalArea: number | null;
       price: Prisma.Decimal | null;
       rentPrice: Prisma.Decimal | null;
+      condoFee: Prisma.Decimal | null;
     } | null = null;
 
     if (needsValidation) {
@@ -739,6 +779,7 @@ export class PropertiesService {
           totalArea: true,
           price: true,
           rentPrice: true,
+          condoFee: true,
         },
       });
 
@@ -750,11 +791,13 @@ export class PropertiesService {
       const effectiveSaleTypes = saleTypes ?? currentProperty.saleTypes.map((st) => st.type);
       const effectivePrice = propertyData.price ?? currentProperty.price?.toString();
       const effectiveRentPrice = propertyData.rentPrice ?? currentProperty.rentPrice?.toString();
+      const effectiveCondoFee = propertyData.condoFee ?? currentProperty.condoFee?.toString();
       this.validateBusinessTypeConfig(
         newBusinessType,
         effectiveSaleTypes,
         effectivePrice,
         effectiveRentPrice,
+        effectiveCondoFee,
       );
 
       if (hasSuitesOrBathroomsUpdate) {
