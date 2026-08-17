@@ -108,8 +108,26 @@ describe('Auth (e2e)', () => {
     expect(res.body.code).toBe('INVALID_CREDENTIALS');
   });
 
-  it('GET /auth/me sem cookie retorna 401', async () => {
-    await request(app.getHttpServer()).get('/auth/me').expect(401);
+  // Os dois casos abaixo são a rota inteira: sem sessão o 200 com `null` é o que impede o
+  // visitante anônimo de disparar um refresh que não tem o que renovar, e o 401 com cookie de
+  // refresh é o que impede que essa economia deslogue quem só está com o access token vencido.
+  // Trocar um pelo outro reintroduz um dos dois defeitos, e nenhum aparece como erro na tela.
+  it('GET /auth/me sem cookie nenhum retorna 200 com null, para não provocar refresh inútil', async () => {
+    const res = await request(app.getHttpServer()).get('/auth/me').expect(200);
+
+    // `toBeNull`, não `toBeFalsy`: um corpo vazio (o que o Nest devolve para um `return null`
+    // de handler) também seria falsy aqui, e quebraria o `response.json()` do cliente.
+    expect(res.body).toBeNull();
+  });
+
+  // Um valor qualquer basta, e é o teste mais fiel: o handler ramifica pela **presença** do
+  // cookie, não pela validade dele — quem valida é o `POST /auth/refresh` que vem depois. Também
+  // não gasta um `POST /auth/login`, que tem teto de 5/5min por IP compartilhado por este arquivo.
+  it('GET /auth/me com refreshToken e sem accessToken retorna 401, para o cliente renovar', async () => {
+    await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Cookie', ['refreshToken=qualquer-coisa'])
+      .expect(401);
   });
 
   // Nota: sem cookie, o passport-jwt falha a extração do token antes mesmo de

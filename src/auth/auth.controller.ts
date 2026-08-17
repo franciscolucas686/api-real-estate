@@ -6,7 +6,9 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Req,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -18,7 +20,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { ConfigService } from '../config/config.service';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -28,6 +30,7 @@ import { RegisterDto } from './dto/register.dto';
 import { AdminSecretGuard } from './guards/admin-secret.guard';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { JwtGuard } from './guards/jwt.guard';
+import { OptionalJwtGuard } from './guards/optional-jwt.guard';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -200,12 +203,41 @@ export class AuthController {
     return {};
   }
 
+  /**
+   * Auth-aware, e não `JwtGuard`, pelo mesmo motivo de `GET /properties/status-counts`: o
+   * frontend pergunta pela sessão em **toda** página (o nav decide entre "Entrar" e "Dashboard"),
+   * e enquanto esta rota respondia 401 a quem nunca logou, cada visita anônima virava
+   * `401 → POST /auth/refresh → 401`. Aquele refresh é garantidamente inútil — não há cookie para
+   * renovar — e cai num balde de 30/5min por IP, cuja vítima ao estourar é o operador logado.
+   *
+   * O cliente não pode decidir isso sozinho: os cookies são `httpOnly`, então o JS não enxerga se
+   * há sessão. Quem enxerga é este handler, e por isso é ele quem responde a pergunta "vale a pena
+   * tentar renovar?". Três ramos:
+   *
+   * - `user` populado → o perfil, como sempre.
+   * - Sem `user` **mas com cookie de refresh** → 401. O access token expirou e a renovação tem o
+   *   que renovar; `apiFetch` refresca e repete, exatamente como antes.
+   * - Sem `user` e sem cookie de refresh → 200 com `null`. Anônimo de verdade, e nada a tentar.
+   *
+   * O ramo do meio é o que impede a regressão óbvia: sem ele, um usuário com access token expirado
+   * seria informado de que é anônimo e deslogado em silêncio.
+   *
+   * `res.json(null)` explícito porque um `return null` de handler faz o Nest responder com corpo
+   * **vazio**, e aí o `response.json()` do cliente estoura ao tentar parseá-lo. 204 seria pior
+   * ainda: o cliente o mapeia para `undefined`, que o React Query recusa como data.
+   */
   @Get('me')
-  @UseGuards(JwtGuard)
-  @ApiOperation({ summary: 'Obter perfil do usuário autenticado' })
+  @UseGuards(OptionalJwtGuard)
+  @ApiOperation({
+    summary: 'Obter perfil da sessão atual',
+    description:
+      'Devolve o perfil quando há sessão válida. Sem sessão nenhuma responde 200 com `null`, ' +
+      'para que um visitante anônimo não dispare uma tentativa de refresh inútil. Responde 401 ' +
+      'apenas quando existe cookie de refresh, ou seja, quando renovar de fato pode resolver.',
+  })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Perfil recuperado com sucesso',
+    description: 'Perfil recuperado, ou `null` quando não há sessão',
     schema: {
       example: {
         id: 'uuid',
@@ -214,13 +246,29 @@ export class AuthController {
       },
     },
   })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async getProfile(@CurrentUser() user: CurrentUserDto) {
-    return {
+  @ApiResponse({
+    status: 401,
+    description: 'Access token ausente ou expirado, mas há cookie de refresh — renove e repita',
+  })
+  getProfile(
+    @CurrentUser() user: CurrentUserDto | undefined,
+    @Req() request: Request,
+    @Res() response: Response,
+  ) {
+    if (!user) {
+      if (request.cookies?.refreshToken) {
+        throw new UnauthorizedException();
+      }
+
+      response.json(null);
+      return;
+    }
+
+    response.json({
       id: user.id,
       email: user.email,
       name: user.name,
-    };
+    });
   }
 
   @Post('logout')
