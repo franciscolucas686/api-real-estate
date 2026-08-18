@@ -111,6 +111,17 @@ export class AuthController {
     description: 'Chave de acesso administrativo necessária para criar usuários',
     required: true,
   })
+  // Declarado só para desmarcar o "required". O @nestjs/swagger documenta todo parâmetro
+  // `@Headers()` automaticamente e crava `required: true` (o `?` do TypeScript some na
+  // compilação, então a lib não tem como saber que é opcional) — e a doc passava a exigir
+  // de quem consome a API um header que o cliente HTTP já manda sozinho.
+  @ApiHeader({
+    name: 'user-agent',
+    description:
+      'Enviado automaticamente pelo cliente HTTP. Serve apenas como rótulo do dispositivo na ' +
+      'sessão criada — não é exigido e não afeta a autenticação.',
+    required: false,
+  })
   @ApiBody({ type: RegisterDto })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -144,6 +155,14 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 5 * 60 * 1000, limit: 5 } })
   @ApiOperation({ summary: 'Fazer login' })
+  // Mesmo motivo do `register` acima: sem isto a doc pede um header que ninguém precisa enviar.
+  @ApiHeader({
+    name: 'user-agent',
+    description:
+      'Enviado automaticamente pelo cliente HTTP. Serve apenas como rótulo do dispositivo na ' +
+      'sessão criada — não é exigido e não afeta a autenticação.',
+    required: false,
+  })
   @ApiBody({ type: LoginDto })
   @ApiResponse({
     status: HttpStatus.OK,
