@@ -126,8 +126,6 @@ export class PropertiesController {
     return { [PropertyStatus.ACTIVE]: counts[PropertyStatus.ACTIVE] };
   }
 
-  // Declarada antes de @Get(':id') porque a primeira rota que casa vence, e 'trash'
-  // seria capturado como id — o ParseUUIDPipe rejeitaria com 400 em vez de chegar aqui.
   @Get('trash')
   @UseGuards(JwtGuard)
   @ApiSecurity('cookie')
