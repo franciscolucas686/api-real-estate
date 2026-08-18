@@ -20,10 +20,10 @@ export class SiteSettingsDto {
   email!: string;
 
   @ApiProperty({
-    example: '1132104500',
-    description: 'Telefone de contato (somente dígitos)',
+    example: 'francinegestora',
+    description: 'Handle do Instagram da imobiliária (sem "@" e sem URL). Vazio = não configurado',
   })
-  phone!: string;
+  instagram!: string;
 
   @ApiProperty({
     example: 'Seg–Sex: 9h às 18h | Sáb: 9h às 13h',

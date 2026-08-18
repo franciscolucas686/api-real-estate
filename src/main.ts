@@ -62,7 +62,7 @@ async function bootstrap() {
     .addTag('whatsapp', 'Pool de números WhatsApp distribuídos automaticamente entre imóveis')
     .addTag(
       'site-settings',
-      'Configurações globais do site (contato: WhatsApp, e-mail, telefone, horário)',
+      'Configurações globais do site (contato: WhatsApp, e-mail, Instagram, horário)',
     )
     .addTag('Health', 'Verificação de saúde da API')
     .build();
