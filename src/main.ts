@@ -64,6 +64,11 @@ async function bootstrap() {
       'site-settings',
       'Configurações globais do site (contato: WhatsApp, e-mail, Instagram, horário)',
     )
+    .addTag(
+      'share',
+      'Links compartilháveis de imóvel — HTML com Open Graph para o crawler do WhatsApp, ' +
+        'redirecionando para a SPA',
+    )
     .addTag('Health', 'Verificação de saúde da API')
     .build();
 

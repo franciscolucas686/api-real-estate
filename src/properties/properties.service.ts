@@ -17,6 +17,7 @@ import {
   PropertyNotFoundError,
 } from '../common/errors';
 import { PropertyStatusService } from './property-status.service';
+import { publicVisibilityWhere } from './property-visibility';
 import { GeocodingService } from '../geocoding/geocoding.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
@@ -610,11 +611,7 @@ export class PropertiesService {
 
   async findOne(id: string, isAuthenticated = false): Promise<PropertyDetailDto> {
     const property = await this.prisma.property.findFirst({
-      where: {
-        id,
-        deletedAt: null,
-        ...(isAuthenticated ? {} : { status: PropertyStatus.ACTIVE }),
-      },
+      where: { id, ...publicVisibilityWhere(isAuthenticated) },
       include: {
         images: {
           orderBy: { order: 'asc' },
@@ -1107,19 +1104,17 @@ export class PropertiesService {
     filters: Partial<FilterPropertyDto>,
     isAuthenticated = false,
   ): Prisma.PropertyWhereInput {
-    // Anonymous callers are pinned to ACTIVE and cannot widen it via ?status=, which
-    // would otherwise expose PENDING/INACTIVE inventory to anyone hitting the public
-    // list endpoint. Authenticated callers keep the full filter, including "all
-    // statuses" when ?status= is omitted. Mirrors findOne()'s auth-aware filtering.
-    const statusFilter = isAuthenticated
-      ? filters.status
-        ? { status: filters.status }
-        : {}
-      : { status: PropertyStatus.ACTIVE };
-
+    // O piso — `deletedAt: null` e o pin em ACTIVE para anônimo — vem de
+    // `publicVisibilityWhere`, a mesma função que `findOne` e o módulo `share` usam. Era
+    // uma cópia inline aqui, sincronizada com `findOne` por um comentário; a regra é de
+    // segurança e agora tem uma definição só.
+    //
+    // O que continua sendo desta função: um chamador autenticado pode estreitar por
+    // `?status=`. Anônimo não amplia nada — o pin do piso prevalece, que é o que impede
+    // inventário não publicado de vazar pela listagem pública.
     const where: Prisma.PropertyWhereInput = {
-      deletedAt: null,
-      ...statusFilter,
+      ...publicVisibilityWhere(isAuthenticated),
+      ...(isAuthenticated && filters.status ? { status: filters.status } : {}),
     };
 
     if (filters.types && filters.types.length > 0) {

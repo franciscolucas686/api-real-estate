@@ -15,6 +15,7 @@ import { GeocodingModule } from './geocoding';
 import { PrismaModule } from './prisma/prisma.module';
 import { PropertiesModule } from './properties/properties.module';
 import { R2Module } from './r2/r2.module';
+import { ShareModule } from './share/share.module';
 import { SiteSettingsModule } from './site-settings/site-settings.module';
 import { UsersModule } from './users/users.module';
 
@@ -29,6 +30,7 @@ import { UsersModule } from './users/users.module';
     GeocodingModule,
     PropertiesModule,
     SiteSettingsModule,
+    ShareModule,
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
       // ttl é em milissegundos no @nestjs/throttler v6+: 60_000ms = 100 requisições/60s
