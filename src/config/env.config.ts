@@ -13,6 +13,12 @@ const envSchema = z
       }),
 
     CORS_ORIGIN: z.union([z.url(), z.literal('*')]).optional(),
+    // Onde a SPA vive. O módulo `share` redireciona para lá depois de servir as OG tags
+    // ao crawler. Opcional de propósito: em produção o `CORS_ORIGIN` do fly.toml já é
+    // esse mesmo endereço e serve de fallback, então nenhuma variável nova precisa ser
+    // criada lá. Em desenvolvimento ela é necessária, porque o `CORS_ORIGIN` de
+    // `.env.development` aponta para a porta da própria API (3000), não para o Vite (5173).
+    APP_PUBLIC_URL: z.url().optional(),
 
     /**
      * Domínio dos cookies de sessão, com ponto inicial (`.seudominio.com`).
