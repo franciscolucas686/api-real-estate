@@ -9,7 +9,7 @@ const DEFAULTS: Omit<SiteSettings, 'updatedAt'> = {
   id: SINGLETON_ID,
   whatsapp: '',
   email: '',
-  phone: '',
+  instagram: '',
   hours: '',
 };
 
