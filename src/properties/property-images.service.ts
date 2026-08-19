@@ -62,9 +62,12 @@ export class PropertyImagesService {
       this.prisma.propertyImage.findFirst({
         where: { propertyId },
         orderBy: { order: 'desc' },
-        select: { order: true },
+        select: { order: true, url: true },
       }),
-      this.prisma.property.findUnique({ where: { id: propertyId }, select: { id: true } }),
+      this.prisma.property.findUnique({
+        where: { id: propertyId },
+        select: { id: true, code: true },
+      }),
       roomId
         ? this.prisma.propertyRoom.findUnique({
             where: { id: roomId },
@@ -83,6 +86,17 @@ export class PropertyImagesService {
 
     const startOrder = (lastImage?.order ?? -1) + 1;
 
+    // A pasta no R2 termina com o código do imóvel só quando não há foto
+    // anterior a seguir — um imóvel sem nenhuma foto ainda (novo, ou com todas
+    // já removidas) recebe `{propertyId}-{code}` desde a primeira; uma foto
+    // adicional a um imóvel que já tem fotos reaproveita a pasta que essas
+    // fotos já usam, para não fragmentar a galeria entre duas pastas. Isso
+    // também cobre imóveis antigos (pasta `{propertyId}` sem sufixo) sem
+    // precisar saber, aqui, se o imóvel é "antigo" ou "novo".
+    const folder = lastImage
+      ? this.r2.getObjectKeyFromUrl(lastImage.url).split('/')[0]
+      : `${propertyId}-${property.code}`;
+
     // Comprimir TUDO antes de subir QUALQUER COISA. As duas etapas já estiveram
     // juntas num método só, e aí um arquivo inválido no meio do lote deixava lixo:
     // o `Promise.all` rejeitava, o `createMany` abaixo nunca rodava, e as fotos que
@@ -100,7 +114,7 @@ export class PropertyImagesService {
 
     const images = await Promise.all(
       compressed.map((buffer, index) =>
-        this.uploadCompressedImage(propertyId, buffer, startOrder + index, roomId),
+        this.uploadCompressedImage(propertyId, folder, buffer, startOrder + index, roomId),
       ),
     );
 
@@ -231,14 +245,19 @@ export class PropertyImagesService {
   }
 
   async deleteAllPropertyImagesFromR2(propertyId: string): Promise<void> {
+    // Sem barra final de propósito: `Property.id` é sempre um UUID de
+    // comprimento fixo, então nunca é prefixo de outro, e o prefixo sozinho
+    // casa tanto a pasta antiga (`{propertyId}/...`) quanto a nova
+    // (`{propertyId}-{code}/...`) numa chamada só — sem precisar saber, aqui,
+    // qual das duas este imóvel usa.
     await Promise.all([
       this.r2
-        .deleteObjectsByPrefix(`${propertyId}/`)
+        .deleteObjectsByPrefix(propertyId)
         .catch((error) =>
           this.logger.warn(`Erro ao deletar imagens ativas do imóvel ${propertyId} do R2:`, error),
         ),
       this.r2
-        .deleteObjectsByPrefix(`deleted/${propertyId}/`)
+        .deleteObjectsByPrefix(`deleted/${propertyId}`)
         .catch((error) =>
           this.logger.warn(
             `Erro ao deletar imagens deletadas do imóvel ${propertyId} do R2:`,
@@ -260,8 +279,11 @@ export class PropertyImagesService {
         this.limit(async () => {
           try {
             const sourceKey = this.r2.getObjectKeyFromUrl(image.url);
-            const fileName = sourceKey.slice(sourceKey.indexOf('/') + 1);
-            const destKey = `deleted/${propertyId}/${fileName}`;
+            // Preserva a pasta real (`{propertyId}` ou `{propertyId}-{code}`)
+            // em vez de reconstruí-la a partir de `propertyId` sozinho — o que
+            // descartaria o sufixo do código de um imóvel novo ao mover para a
+            // lixeira.
+            const destKey = `deleted/${sourceKey}`;
             const newUrl = await this.r2.moveObject(sourceKey, destKey);
             await this.prisma.propertyImage.update({
               where: { id: image.id },
@@ -287,8 +309,10 @@ export class PropertyImagesService {
         this.limit(async () => {
           try {
             const sourceKey = this.r2.getObjectKeyFromUrl(image.url);
-            const fileName = sourceKey.slice(sourceKey.lastIndexOf('/') + 1);
-            const destKey = `${propertyId}/${fileName}`;
+            // Inverso de `movePropertyImagesToDeleted`: só remove o prefixo
+            // `deleted/`, preservando a pasta real em vez de reconstruí-la a
+            // partir de `propertyId` sozinho.
+            const destKey = sourceKey.replace(/^deleted\//, '');
             const newUrl = await this.r2.moveObject(sourceKey, destKey);
             await this.prisma.propertyImage.update({
               where: { id: image.id },
@@ -336,11 +360,12 @@ export class PropertyImagesService {
 
   private async uploadCompressedImage(
     propertyId: string,
+    folder: string,
     compressedBuffer: Buffer,
     order: number,
     roomId?: string,
   ): Promise<PropertyImage> {
-    const key = `${propertyId}/${randomUUID()}.jpg`;
+    const key = `${folder}/${randomUUID()}.jpg`;
     const url = await this.r2.uploadImage(compressedBuffer, key, 'image/jpeg');
 
     return {
