@@ -268,6 +268,54 @@ describe('PropertyImagesService', () => {
       expect(mockR2Service.uploadImage).not.toHaveBeenCalled();
       expect(mockPrismaService.propertyImage.createMany).not.toHaveBeenCalled();
     });
+
+    // A pasta no R2 só ganha o sufixo do código quando não há foto anterior a
+    // seguir — é o que garante que um imóvel novo já nasce com a pasta
+    // identificável desde a primeira foto.
+    it('usa "{propertyId}-{code}" como pasta quando o imóvel ainda não tem nenhuma foto', async () => {
+      mockPrismaService.propertyImage.findFirst.mockResolvedValue(null);
+      mockPrismaService.property.findUnique.mockResolvedValue({
+        id: 'prop-1',
+        code: '654321',
+        status: PropertyStatus.PENDING,
+      });
+      mockR2Service.uploadImage.mockResolvedValue('https://bucket/prop-1-654321/a.jpg');
+      mockPrismaService.propertyImage.createMany.mockResolvedValue({ count: 1 });
+
+      await service.uploadImages('prop-1', [makeFile('a')]);
+
+      expect(mockR2Service.uploadImage).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringMatching(/^prop-1-654321\/.+\.jpg$/),
+        'image/jpeg',
+      );
+    });
+
+    // Uma foto adicional a um imóvel que já tem fotos reaproveita a pasta que
+    // essas fotos já usam — mesmo que o código do imóvel seja outro — para não
+    // fragmentar a galeria entre duas pastas diferentes.
+    it('reaproveita a pasta da última foto quando o imóvel já tem fotos', async () => {
+      mockPrismaService.propertyImage.findFirst.mockResolvedValue({
+        order: 2,
+        url: 'https://bucket/prop-1-111111/existing.jpg',
+      });
+      mockR2Service.getObjectKeyFromUrl.mockReturnValue('prop-1-111111/existing.jpg');
+      mockPrismaService.property.findUnique.mockResolvedValue({
+        id: 'prop-1',
+        code: '999999',
+        status: PropertyStatus.ACTIVE,
+      });
+      mockR2Service.uploadImage.mockResolvedValue('https://bucket/prop-1-111111/new.jpg');
+      mockPrismaService.propertyImage.createMany.mockResolvedValue({ count: 1 });
+
+      await service.uploadImages('prop-1', [makeFile('a')]);
+
+      expect(mockR2Service.uploadImage).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringMatching(/^prop-1-111111\/.+\.jpg$/),
+        'image/jpeg',
+      );
+    });
   });
 
   describe('deleteImage — o propertyId da rota é conferido', () => {
@@ -301,6 +349,86 @@ describe('PropertyImagesService', () => {
       await expect(service.bulkDeleteImages('prop-1', { imageIds: ['img-1'] })).rejects.toThrow(
         'conexão perdida',
       );
+    });
+  });
+
+  describe('movePropertyImagesToDeleted', () => {
+    // O destino é derivado da chave de origem, não reconstruído a partir do
+    // propertyId sozinho — o que descartaria o sufixo do código de um imóvel
+    // novo ao mover para a lixeira.
+    it('preserva a pasta real (com sufixo de código) ao mover para deleted/', async () => {
+      mockPrismaService.propertyImage.findMany.mockResolvedValue([
+        { id: 'img-1', propertyId: 'prop-1', url: 'https://bucket/prop-1-654321/a.jpg' },
+      ]);
+      mockR2Service.getObjectKeyFromUrl.mockReturnValue('prop-1-654321/a.jpg');
+      mockR2Service.moveObject.mockResolvedValue('https://bucket/deleted/prop-1-654321/a.jpg');
+      mockPrismaService.propertyImage.update.mockResolvedValue({});
+
+      await service.movePropertyImagesToDeleted('prop-1');
+
+      expect(mockR2Service.moveObject).toHaveBeenCalledWith(
+        'prop-1-654321/a.jpg',
+        'deleted/prop-1-654321/a.jpg',
+      );
+    });
+
+    it('continua funcionando para uma pasta antiga sem sufixo', async () => {
+      mockPrismaService.propertyImage.findMany.mockResolvedValue([
+        { id: 'img-1', propertyId: 'prop-1', url: 'https://bucket/prop-1/a.jpg' },
+      ]);
+      mockR2Service.getObjectKeyFromUrl.mockReturnValue('prop-1/a.jpg');
+      mockR2Service.moveObject.mockResolvedValue('https://bucket/deleted/prop-1/a.jpg');
+      mockPrismaService.propertyImage.update.mockResolvedValue({});
+
+      await service.movePropertyImagesToDeleted('prop-1');
+
+      expect(mockR2Service.moveObject).toHaveBeenCalledWith('prop-1/a.jpg', 'deleted/prop-1/a.jpg');
+    });
+  });
+
+  describe('restorePropertyImages', () => {
+    it('preserva a pasta real (com sufixo de código) ao restaurar', async () => {
+      mockPrismaService.propertyImage.findMany.mockResolvedValue([
+        { id: 'img-1', propertyId: 'prop-1', url: 'https://bucket/deleted/prop-1-654321/a.jpg' },
+      ]);
+      mockR2Service.getObjectKeyFromUrl.mockReturnValue('deleted/prop-1-654321/a.jpg');
+      mockR2Service.moveObject.mockResolvedValue('https://bucket/prop-1-654321/a.jpg');
+      mockPrismaService.propertyImage.update.mockResolvedValue({});
+
+      await service.restorePropertyImages('prop-1');
+
+      expect(mockR2Service.moveObject).toHaveBeenCalledWith(
+        'deleted/prop-1-654321/a.jpg',
+        'prop-1-654321/a.jpg',
+      );
+    });
+
+    it('continua funcionando para uma pasta antiga sem sufixo', async () => {
+      mockPrismaService.propertyImage.findMany.mockResolvedValue([
+        { id: 'img-1', propertyId: 'prop-1', url: 'https://bucket/deleted/prop-1/a.jpg' },
+      ]);
+      mockR2Service.getObjectKeyFromUrl.mockReturnValue('deleted/prop-1/a.jpg');
+      mockR2Service.moveObject.mockResolvedValue('https://bucket/prop-1/a.jpg');
+      mockPrismaService.propertyImage.update.mockResolvedValue({});
+
+      await service.restorePropertyImages('prop-1');
+
+      expect(mockR2Service.moveObject).toHaveBeenCalledWith('deleted/prop-1/a.jpg', 'prop-1/a.jpg');
+    });
+  });
+
+  describe('deleteAllPropertyImagesFromR2', () => {
+    // Sem barra final: um propertyId (UUID de comprimento fixo) nunca é
+    // prefixo de outro, e o prefixo sozinho casa tanto a pasta antiga
+    // (`{propertyId}/...`) quanto a nova (`{propertyId}-{code}/...`) numa
+    // chamada só, sem precisar saber qual das duas o imóvel usa.
+    it('apaga por prefixo sem barra final, cobrindo pasta antiga e nova numa chamada só', async () => {
+      mockR2Service.deleteObjectsByPrefix.mockResolvedValue(undefined);
+
+      await service.deleteAllPropertyImagesFromR2('prop-1');
+
+      expect(mockR2Service.deleteObjectsByPrefix).toHaveBeenCalledWith('prop-1');
+      expect(mockR2Service.deleteObjectsByPrefix).toHaveBeenCalledWith('deleted/prop-1');
     });
   });
 });
