@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏗️ API — Imobiliária
+# API — Imobiliária
 
 **Esse back-end tirou uma imobiliária inteira da galeria do celular.**
 
@@ -20,7 +20,7 @@
 
 ---
 
-## 📖 O que é isto
+## O que é isto
 
 Esta é a API que tem o catálogo de imóveis de uma imobiliária real. Antes dela, as fotos
 dos imóveis viviam espalhadas entre a galeria do celular do corretor e pastas soltas no Drive —
@@ -39,7 +39,7 @@ O front-end que consome a API é um PWA em React e vive [está nesse outro repos
 
 ---
 
-## 🛠️ Stack
+## Stack
 
 | Camada | Tecnologia | Por que |
 |---|---|---|
@@ -56,7 +56,7 @@ O front-end que consome a API é um PWA em React e vive [está nesse outro repos
 
 ---
 
-## 🚀 Rodando localmente
+## Rodando localmente
 
 Você vai precisar de **Node.js 22+** (há um `.nvmrc` — `nvm use` resolve) e **Docker**. São
 seis comandos, e nenhum passo manual escondido.
@@ -95,26 +95,26 @@ Pronto:
 
 **Login criado pelo seed:** `admin@imobiliaria.com` / `Admin@123`
 
-> ⚠️ **Sobre o nome do arquivo `.env.development`.** Este projeto não lê `.env`. Todos os scripts
+> **Sobre o nome do arquivo `.env.development`.** Este projeto não lê `.env`. Todos os scripts
 > carregam o arquivo explicitamente (`dotenv -e .env.development -- nest start`), e o `dotenv-cli`
 > **ignora arquivo ausente em silêncio**. Se você criar `.env` por engano, não aparece erro de
 > arquivo — o app morre depois, na validação, dizendo `JWT_SECRET deve ter no mínimo 32 caracteres`.
 > A mensagem aponta para a variável e nunca para a causa. É por isso que o `.env.example` insiste
 > nesse ponto.
 
-> ⚠️ **O passo 5 leva cerca de um minuto, e isso é esperado.** Ele baixa 120 fotos de exemplo do
+> **O passo 5 leva cerca de um minuto, e isso é esperado.** Ele baixa 120 fotos de exemplo do
 > `picsum.photos` (5 por cômodo, 5 em paralelo) e resolve cada bairro no Nominatim, que exige uma
 > pausa de 1s entre chamadas. A saída são pontos, um por foto: `.` é sucesso, `!` é falha.
 > **Falha de foto não derruba o seed** — o imóvel entra sem aquela imagem. Se a internet estiver
 > fora, você termina com os 10 imóveis e nenhuma foto: o app funciona, os cards ficam com
 > "Sem fotos".
 
-> ⚠️ **O seed apaga tudo antes de recriar** — banco *e* bucket. Por isso ele exige
+> **O seed apaga tudo antes de recriar** — banco *e* bucket. Por isso ele exige
 > `RUN_SEED="true"` e se recusa a rodar com `NODE_ENV=production`.
 
 ---
 
-## 🧪 Testes
+## Testes
 
 ```bash
 npm test          # 176 testes unitários — não precisa de banco, nem de .env
@@ -145,7 +145,7 @@ mocká-lo — nenhum teste escreve num bucket de verdade.
 
 ---
 
-## 🔍 Qualidade
+## Qualidade
 
 ```bash
 npm run lint          # ESLint (src + test), sem corrigir — é este que o CI roda
@@ -161,7 +161,7 @@ uma corrida entre dois workflows.
 
 ---
 
-## 🗺️ Endpoints
+## Endpoints
 
 Todos anotados no Swagger em `/docs`, que é a fonte completa. Resumo:
 
@@ -189,7 +189,7 @@ Todos anotados no Swagger em `/docs`, que é a fonte completa. Resumo:
 
 ---
 
-## 🗄️ Modelo de dados
+## Modelo de dados
 
 15 modelos, 23 migrations. O núcleo:
 
@@ -207,12 +207,12 @@ tem topografia.** Em vez de uma tabela larga cheia de coluna nula, cada tipo tem
 
 ---
 
-## 🏛️ Decisões de arquitetura
+## Decisões de arquitetura
 
 Cada bloco abaixo é um problema que apareceu de verdade. Nenhum é teoria.
 
 <details>
-<summary><b>🔐 Por que a sessão vive num cookie HttpOnly, e não no localStorage</b></summary>
+<summary><b> Por que a sessão vive num cookie HttpOnly, e não no localStorage</b></summary>
 
 <br>
 
@@ -234,7 +234,7 @@ o cookie de sessão acompanhar o apex, o www e todo subdomínio futuro — nenhu
 </details>
 
 <details>
-<summary><b>🚦 O rate limit e a linha `trust proxy` que faz ele existir</b></summary>
+<summary><b> O rate limit e a linha `trust proxy` que faz ele existir</b></summary>
 
 <br>
 
@@ -258,7 +258,7 @@ frente. Pôr a Cloudflare proxiada em `api.` acrescenta um hop.
 </details>
 
 <details>
-<summary><b>📸 O status do imóvel se move sozinho — pela contagem de fotos</b></summary>
+<summary><b> O status do imóvel se move sozinho — pela contagem de fotos</b></summary>
 
 <br>
 
@@ -275,7 +275,7 @@ contagem é `> 0` por construção e ele só olha para um lado. A remoção prec
 </details>
 
 <details>
-<summary><b>🧱 O app se recusa a subir com ambiente inválido</b></summary>
+<summary><b> O app se recusa a subir com ambiente inválido</b></summary>
 
 <br>
 
@@ -308,7 +308,7 @@ e redireciona pessoas de verdade para a SPA. A imagem de capa é gerada sob dema
 </details>
 
 <details>
-<summary><b>🖼️ Toda foto é reencodada antes de chegar ao bucket</b></summary>
+<summary><b> Toda foto é reencodada antes de chegar ao bucket</b></summary>
 
 <br>
 
@@ -323,7 +323,7 @@ traz benefício e só consome memória, e o paralelismo padrão dele disputa CPU
 
 ---
 
-## 📦 Deploy
+## Deploy
 
 Produção roda no **Fly.io**, a partir do `Dockerfile` multi-stage deste repositório.
 
@@ -339,7 +339,7 @@ pior caso possível.
 
 ---
 
-## 📜 Todos os comandos
+## Todos os comandos
 
 | Comando | O que faz |
 |---|---|
@@ -361,7 +361,7 @@ pior caso possível.
 
 ---
 
-## 👨‍💻 Autor
+## Autor
 
 **Francisco Lucas**
 
@@ -372,12 +372,12 @@ negócios reais. Este projeto precisou ser criado para uma imobiliária que prec
 [![GitHub](https://img.shields.io/badge/GitHub-seguir-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/franciscolucas686)
 [![Email](https://img.shields.io/badge/Email-falar-EA4335?style=for-the-badge&logo=gmail&logoColor=white)](mailto:franciscolucas686@gmail.com)
 
-## 📄 Licença
+## Licença
 
 MIT — veja [LICENSE](LICENSE).
 
 <div align="center">
 
-⭐ **Se este projeto te interessou, deixe uma estrela!**
+ **Se este projeto te interessou, deixe uma estrela!**
 
 </div>
