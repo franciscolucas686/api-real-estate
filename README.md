@@ -2,7 +2,7 @@
 
 # 🏗️ API — Minha Imobiliária
 
-**O back-end que tirou uma imobiliária inteira da galeria do celular.**
+**Esse back-end tirou uma imobiliária inteira da galeria do celular.**
 
 [![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)](https://nestjs.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
@@ -22,12 +22,12 @@
 
 ## 📖 O que é isto
 
-Esta é a API que sustenta o catálogo de imóveis de uma imobiliária real. Antes dela, as fotos
+Esta é a API que tem o catálogo de imóveis de uma imobiliária real. Antes dela, as fotos
 dos imóveis viviam espalhadas entre a galeria do celular do corretor e pastas soltas no Drive —
 achar "aquele apartamento de 2 quartos até R$ 400 mil" era rolar conversa de WhatsApp.
 
 Ela atende **dois públicos com necessidades opostas**, e quase toda decisão de arquitetura aqui
-sai dessa tensão:
+sai desse contexto:
 
 | Quem chama | O que precisa | O que a API garante |
 |---|---|---|
@@ -35,7 +35,7 @@ sai dessa tensão:
 | **Corretor** (autenticado) | Cadastrar, subir fotos, publicar | Sessão em cookie HttpOnly, upload processado, limites apertados no login |
 | **Crawler do WhatsApp** | Montar o preview do link compartilhado | HTML com Open Graph e uma imagem de capa gerada na hora |
 
-O front-end que a consome é um PWA em React e vive [neste outro repositório](https://github.com/franciscolucas686/real-estate-app).
+O front-end que consome a API é um PWA em React e vive [está nesse outro repositório](https://github.com/franciscolucas686/real-estate-app).
 
 ---
 
@@ -358,18 +358,6 @@ pior caso possível.
 | `npm run db:migrate:test` · `db:seed:test` | O mesmo, no banco de teste |
 | `npm run prisma:studio` | Cliente visual do banco |
 | `npm run prisma:generate` | Regenera o client do Prisma |
-
----
-
-## 🗺️ Próximos passos
-
-- [x] Sessões persistidas, com `logout-all` e limpeza agendada
-- [x] Rate limit por usuário e por IP real
-- [x] Preview de link para WhatsApp com Open Graph
-- [x] Lixeira com soft delete e restauração
-- [ ] 🔒 Ligar `strict` completo no TypeScript (hoje: `strictNullChecks` + `noImplicitAny`)
-- [ ] 🧊 Trocar o cache em memória por Redis, para valer com mais de uma instância
-- [ ] 📊 Métricas de visualização por imóvel
 
 ---
 
