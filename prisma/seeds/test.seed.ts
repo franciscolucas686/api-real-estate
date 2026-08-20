@@ -1,4 +1,12 @@
-import { BusinessType, PrismaClient, PropertyStatus, PropertyType, SaleType, Topography, Zoning } from '@prisma/client';
+import {
+  BusinessType,
+  PrismaClient,
+  PropertyStatus,
+  PropertyType,
+  SaleType,
+  Topography,
+  Zoning,
+} from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 /**
