@@ -173,9 +173,7 @@ describe('Properties list (e2e)', () => {
     const sample = (all.body as ListResponse).data[0];
     expect(sample).toBeDefined();
 
-    const detail = await request(app.getHttpServer())
-      .get(`/properties/${sample.id}`)
-      .expect(200);
+    const detail = await request(app.getHttpServer()).get(`/properties/${sample.id}`).expect(200);
     const city = (detail.body as { city: string }).city;
 
     const res = await anon(`take=94&q=${encodeURIComponent(city)}`).expect(200);

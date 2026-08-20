@@ -221,7 +221,10 @@ describe('Auth (e2e)', () => {
     refreshB = extractCookie(aindaVivo.get('Set-Cookie'), 'refreshToken');
 
     // logout-all derruba tudo, inclusive quem chamou.
-    await request(app.getHttpServer()).post('/auth/logout-all').set('Cookie', [acessoB]).expect(200);
+    await request(app.getHttpServer())
+      .post('/auth/logout-all')
+      .set('Cookie', [acessoB])
+      .expect(200);
     const res = await request(app.getHttpServer())
       .post('/auth/refresh')
       .set('Cookie', [refreshB])
