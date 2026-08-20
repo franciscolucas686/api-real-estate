@@ -10,6 +10,30 @@ services:
       POSTGRES_DB: app_dev
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Cria o banco usado por `npm run test:e2e`. O `POSTGRES_DB` acima só cria um
+  # banco, e os scripts de initdb do Postgres rodam uma vez só, em volume novo —
+  # o que deixaria de fora justamente quem já tem o volume. Este serviço roda a
+  # cada `up`, é idempotente, e por isso conserta os dois casos.
+  postgres-setup:
+    image: postgres:15
+    container_name: postgres_setup
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: postgres
+    entrypoint: >
+      /bin/sh -c "
+        psql -h postgres -U postgres -tc \"SELECT 1 FROM pg_database WHERE datname='app_test'\" | grep -q 1 ||
+        psql -h postgres -U postgres -c 'CREATE DATABASE app_test' &&
+        echo 'Test database ready.'
+      "
 
   minio:
     image: minio/minio:latest

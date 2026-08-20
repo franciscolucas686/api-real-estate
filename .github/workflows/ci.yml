@@ -6,10 +6,29 @@ on:
   push:
     branches: [develop]
 
+# `branches` acima filtra a base do PR, não a origem: qualquer branch que abra PR para
+# main ou develop roda isto. Push numa branch de feature, sozinho, não roda.
+
+# Execuções superadas do mesmo ref são canceladas: num PR só o resultado do último commit
+# significa alguma coisa, e rodadas de revisão deixariam runs obsoletos queimando minutos
+# em paralelo. De propósito NÃO espelhado no cd.yml — lá o ponto é que *todo* commit que
+# chega na main seja verificado, então cancelar um porque outro chegou anula o objetivo.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Nada aqui escreve: sem comentário em PR, sem release, sem artefato. O default do token
+# vem da configuração do repositório/org e costuma ser read-write.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: test
     runs-on: ubuntu-latest
+    # A suíte roda em poucos minutos. O default do GitHub é 360 minutos, então um teste
+    # travado seguraria um runner por seis horas antes de desistir.
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -43,21 +62,17 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Format check
+        run: npm run format:check
+
       - name: Build
         run: npm run build
 
+      # Mesmo comando que o README manda o desenvolvedor rodar. Antes este passo escrevia
+      # o arquivo inline, o que fazia dele uma segunda fonte de verdade: mudar uma
+      # variável exigia lembrar de mudar nos dois lugares, e o CI só reclamaria depois.
       - name: Write .env.test
-        run: |
-          cat > .env.test <<'EOF'
-          NODE_ENV=test
-          PORT=3001
-          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app_test
-          CORS_ORIGIN=http://localhost:3000
-          JWT_SECRET=test-jwt-secret-must-be-at-least-32-chars!
-          JWT_REFRESH_SECRET=test-refresh-secret-must-be-at-least-32!!
-          ADMIN_SECRET=test-admin-secret-must-be-at-least-32-ch!
-          RUN_SEED=true
-          EOF
+        run: cp .env.test.example .env.test
 
       - name: Migrate test database
         run: npm run db:migrate:test

@@ -18,10 +18,17 @@ on:
   push:
     branches: [main]
 
+# Nada aqui escreve no repositório: o deploy se autentica no Fly com o FLY_API_TOKEN,
+# não com o token do GitHub. O default do token vem da configuração do repositório/org
+# e costuma ser read-write.
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -55,21 +62,15 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Format check
+        run: npm run format:check
+
       - name: Build
         run: npm run build
 
+      # Mesmo arquivo versionado que o README manda copiar — ver a nota no ci.yml.
       - name: Write .env.test
-        run: |
-          cat > .env.test <<'EOF'
-          NODE_ENV=test
-          PORT=3001
-          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app_test
-          CORS_ORIGIN=http://localhost:3000
-          JWT_SECRET=test-jwt-secret-must-be-at-least-32-chars!
-          JWT_REFRESH_SECRET=test-refresh-secret-must-be-at-least-32!!
-          ADMIN_SECRET=test-admin-secret-must-be-at-least-32-ch!
-          RUN_SEED=true
-          EOF
+        run: cp .env.test.example .env.test
 
       - name: Migrate test database
         run: npm run db:migrate:test

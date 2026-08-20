@@ -1,5 +1,21 @@
 import { z } from 'zod';
 
+/**
+ * Trata `VAR=""` como "não definida".
+ *
+ * Num arquivo `.env` não existe forma de escrever `undefined`: quem quer deixar uma
+ * variável de fora escreve `VAR=""` ou apaga a linha, e o `dotenv` entrega string vazia
+ * para o primeiro caso. Sem isto, `.optional()` só cobre a linha apagada — a string vazia
+ * chega ao validador e é reprovada por não casar com o formato.
+ *
+ * Foi assim que o `COOKIE_DOMAIN=""` do `.env.example` derrubava o boot com
+ * "deve começar com ponto", logo abaixo de um comentário mandando deixá-lo vazio. O
+ * `superRefine` de produção já tratava vazio como ausente (`if (!env[key])`), então esta
+ * função é o que faz as duas metades do schema concordarem.
+ */
+const optionalEnv = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -12,13 +28,13 @@ const envSchema = z
         message: 'PORT deve ser um número válido',
       }),
 
-    CORS_ORIGIN: z.union([z.url(), z.literal('*')]).optional(),
+    CORS_ORIGIN: optionalEnv(z.union([z.url(), z.literal('*')])),
     // Onde a SPA vive. O módulo `share` redireciona para lá depois de servir as OG tags
     // ao crawler. Opcional de propósito: em produção o `CORS_ORIGIN` do fly.toml já é
     // esse mesmo endereço e serve de fallback, então nenhuma variável nova precisa ser
     // criada lá. Em desenvolvimento ela é necessária, porque o `CORS_ORIGIN` de
     // `.env.development` aponta para a porta da própria API (3000), não para o Vite (5173).
-    APP_PUBLIC_URL: z.url().optional(),
+    APP_PUBLIC_URL: optionalEnv(z.url()),
 
     /**
      * Domínio dos cookies de sessão, com ponto inicial (`.seudominio.com`).
@@ -33,23 +49,24 @@ const envSchema = z
      * precisa dele. Existe para o caso de o cookie um dia precisar alcançar um host
      * diferente do que o emitiu.
      */
-    COOKIE_DOMAIN: z
-      .string()
-      .regex(/^\.[a-z0-9.-]+$/i, 'COOKIE_DOMAIN deve começar com ponto, ex: .seudominio.com')
-      .optional(),
+    COOKIE_DOMAIN: optionalEnv(
+      z
+        .string()
+        .regex(/^\.[a-z0-9.-]+$/i, 'COOKIE_DOMAIN deve começar com ponto, ex: .seudominio.com'),
+    ),
 
     JWT_SECRET: z.string().min(32, 'JWT_SECRET deve ter no mínimo 32 caracteres'),
 
     JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET deve ter no mínimo 32 caracteres'),
 
-    DATABASE_URL: z.url().optional(),
+    DATABASE_URL: optionalEnv(z.url()),
 
-    R2_ACCOUNT_ID: z.string().optional(),
-    R2_ACCESS_KEY_ID: z.string().optional(),
-    R2_SECRET_ACCESS_KEY: z.string().optional(),
-    R2_BUCKET_NAME: z.string().optional(),
-    R2_PUBLIC_BASE_URL: z.string().url().optional(),
-    R2_ENDPOINT: z.string().url().optional(),
+    R2_ACCOUNT_ID: optionalEnv(z.string()),
+    R2_ACCESS_KEY_ID: optionalEnv(z.string()),
+    R2_SECRET_ACCESS_KEY: optionalEnv(z.string()),
+    R2_BUCKET_NAME: optionalEnv(z.string()),
+    R2_PUBLIC_BASE_URL: optionalEnv(z.string().url()),
+    R2_ENDPOINT: optionalEnv(z.string().url()),
 
     ADMIN_SECRET: z.string().min(32, 'ADMIN_SECRET deve ter no mínimo 32 caracteres'),
   })

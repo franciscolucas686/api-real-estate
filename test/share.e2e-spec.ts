@@ -134,9 +134,7 @@ describe('Share (e2e)', () => {
   it('a imagem responde 404 quando o original não pode ser buscado, sem derrubar a rota', async () => {
     // O seed de teste aponta para `https://placeholder.test/fake.jpg`, que não resolve —
     // exatamente o caminho de falha que precisa devolver 404 em vez de estourar.
-    await request(app.getHttpServer())
-      .get(`/share/properties/${activeId}/image.jpg`)
-      .expect(404);
+    await request(app.getHttpServer()).get(`/share/properties/${activeId}/image.jpg`).expect(404);
   }, 20_000);
 
   it('a imagem de um imóvel não publicado é 404', async () => {
