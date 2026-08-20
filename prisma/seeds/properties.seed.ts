@@ -1,4 +1,9 @@
-import { DeleteObjectsCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectsCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import {
   BusinessType,
   PrismaClient,
@@ -11,7 +16,23 @@ import {
   Zoning,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import pLimit from 'p-limit';
 import sharp from 'sharp';
+
+/**
+ * Quantas fotos de exemplo baixar do picsum.photos ao mesmo tempo.
+ *
+ * O laço era estritamente sequencial: 120 downloads de 1920x1080, um de cada vez,
+ * o que fazia `npm run db:seed:dev` levar alguns minutos imprimindo pontos — tempo
+ * que quem está avaliando o projeto lê como travamento, não como progresso. O custo
+ * aqui é rede, não CPU, então a espera era quase toda ociosa.
+ *
+ * 5 e não mais: é o número de fotos por cômodo, então um cômodo inteiro sai numa
+ * rodada e o log continua saindo cômodo a cômodo, na ordem. Subir muito além disso
+ * troca um problema por outro — o picsum é um serviço gratuito de terceiros e
+ * responde 429 quando se abusa dele, e cada 429 vira uma foto a menos no seed.
+ */
+const PHOTO_DOWNLOAD_CONCURRENCY = 5;
 
 export type PropertyDef = {
   type: PropertyType;
@@ -336,26 +357,45 @@ async function fetchBuffer(index: number): Promise<Buffer> {
 
 export type R2Config = { bucketName: string; publicBaseUrl: string };
 
+/**
+ * Primeira coisa que o seed faz, e por isso a primeira que falha quando o ambiente
+ * não está de pé. O erro cru do SDK da AWS aqui é `NoSuchBucket` ou um
+ * `ECONNREFUSED` — nenhum dos dois menciona MinIO, `docker compose` ou bucket, que
+ * são as três coisas que quem está montando o projeto precisa ouvir. Traduzir custa
+ * um `try/catch` e é a diferença entre "rode `docker compose up -d`" e uma stack
+ * trace de rede.
+ */
 export async function cleanR2(s3: S3Client, r2Config: R2Config): Promise<void> {
   console.log('[1/6] Limpando R2...');
   let token: string | undefined;
   let total = 0;
 
-  do {
-    const list = await s3.send(
-      new ListObjectsV2Command({ Bucket: r2Config.bucketName, ContinuationToken: token }),
-    );
-    const objects = list.Contents?.map((o) => ({ Key: o.Key! })) ?? [];
-
-    if (objects.length > 0) {
-      await s3.send(
-        new DeleteObjectsCommand({ Bucket: r2Config.bucketName, Delete: { Objects: objects } }),
+  try {
+    do {
+      const list = await s3.send(
+        new ListObjectsV2Command({ Bucket: r2Config.bucketName, ContinuationToken: token }),
       );
-      total += objects.length;
-    }
+      const objects = list.Contents?.map((o) => ({ Key: o.Key! })) ?? [];
 
-    token = list.IsTruncated ? list.NextContinuationToken : undefined;
-  } while (token);
+      if (objects.length > 0) {
+        await s3.send(
+          new DeleteObjectsCommand({ Bucket: r2Config.bucketName, Delete: { Objects: objects } }),
+        );
+        total += objects.length;
+      }
+
+      token = list.IsTruncated ? list.NextContinuationToken : undefined;
+    } while (token);
+  } catch (err) {
+    const reason = (err as Error).message;
+    throw new Error(
+      `Não foi possível falar com o armazenamento de imagens em ${process.env.R2_ENDPOINT ?? '(endpoint padrão do R2)'} ` +
+        `(bucket "${r2Config.bucketName}"): ${reason}\n` +
+        `      Em desenvolvimento quem serve isso é o MinIO do docker-compose deste repositório.\n` +
+        `      Rode "docker compose up -d" e espere o container minio_setup terminar — é ele que cria o bucket.\n` +
+        `      Confira com: docker compose ps`,
+    );
+  }
 
   console.log(`      ✓ ${total} objetos removidos do R2`);
 }
@@ -463,25 +503,34 @@ export async function seedProperties(
 
       console.log(`         Sala "${roomName}" – 5 imagens`);
 
-      for (let ii = 0; ii < 5; ii++) {
-        try {
-          const imageIndex = pi * 20 + ri * 5 + ii;
-          const buffer = await fetchBuffer(imageIndex);
-          const url = await uploadToR2(s3, r2Config, property.id, buffer);
-          await prisma.propertyImage.create({
-            data: {
-              propertyId: property.id,
-              roomId: room.id,
-              url,
-              order: ri * 5 + ii,
-            },
-          });
-          process.stdout.write('.');
-        } catch (err) {
-          process.stdout.write('!');
-          console.warn(`\n         ⚠ Falha na imagem (#${ii}): ${(err as Error).message}`);
-        }
-      }
+      // `order` sai do índice, não da ordem de chegada, então paralelizar não
+      // embaralha a galeria. O try/catch continua por foto: uma falha do picsum
+      // custa uma imagem, nunca o seed inteiro.
+      const limit = pLimit(PHOTO_DOWNLOAD_CONCURRENCY);
+
+      await Promise.all(
+        Array.from({ length: 5 }, (_, ii) =>
+          limit(async () => {
+            try {
+              const imageIndex = pi * 20 + ri * 5 + ii;
+              const buffer = await fetchBuffer(imageIndex);
+              const url = await uploadToR2(s3, r2Config, property.id, buffer);
+              await prisma.propertyImage.create({
+                data: {
+                  propertyId: property.id,
+                  roomId: room.id,
+                  url,
+                  order: ri * 5 + ii,
+                },
+              });
+              process.stdout.write('.');
+            } catch (err) {
+              process.stdout.write('!');
+              console.warn(`\n         ⚠ Falha na imagem (#${ii}): ${(err as Error).message}`);
+            }
+          }),
+        ),
+      );
 
       process.stdout.write('\n');
     }
