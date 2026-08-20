@@ -3,14 +3,14 @@ import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class RegisterDto {
   @ApiProperty({
-    example: 'francisco@email.com',
+    example: 'novo.corretor@imobiliaria.com',
     description: 'Email do usuário',
   })
   @IsEmail({}, { message: 'Email inválido' })
   email!: string;
 
   @ApiProperty({
-    example: '12345678',
+    example: 'SenhaForte@123',
     description: 'Senha com no mínimo 6 caracteres',
     minLength: 6,
   })
@@ -19,7 +19,7 @@ export class RegisterDto {
   password!: string;
 
   @ApiPropertyOptional({
-    example: 'Francisco Lucas',
+    example: 'Novo Corretor',
     description: 'Nome do usuário',
   })
   @IsOptional()

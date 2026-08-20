@@ -3,15 +3,15 @@ import { IsEmail, IsString, MinLength } from 'class-validator';
 
 export class LoginDto {
   @ApiProperty({
-    example: 'francisco@email.com',
-    description: 'Email do usuário',
+    example: 'admin@imobiliaria.com',
+    description: 'Email do usuário. Este exemplo é o usuário que `npm run db:seed:dev` cria.',
   })
   @IsEmail({}, { message: 'Email inválido' })
   email!: string;
 
   @ApiProperty({
-    example: '12345678',
-    description: 'Senha do usuário com no mínimo 6 caracteres',
+    example: 'Admin@123',
+    description: 'Senha do usuário, mínimo de 6 caracteres. Este exemplo é a senha do seed.',
     minLength: 6,
   })
   @IsString({ message: 'Senha deve ser uma string' })

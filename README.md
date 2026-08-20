@@ -102,9 +102,15 @@ Pronto:
 > A mensagem aponta para a variável e nunca para a causa. É por isso que o `.env.example` insiste
 > nesse ponto.
 
+> ⚠️ **O passo 5 leva cerca de um minuto, e isso é esperado.** Ele baixa 120 fotos de exemplo do
+> `picsum.photos` (5 por cômodo, 5 em paralelo) e resolve cada bairro no Nominatim, que exige uma
+> pausa de 1s entre chamadas. A saída são pontos, um por foto: `.` é sucesso, `!` é falha.
+> **Falha de foto não derruba o seed** — o imóvel entra sem aquela imagem. Se a internet estiver
+> fora, você termina com os 10 imóveis e nenhuma foto: o app funciona, os cards ficam com
+> "Sem fotos".
+
 > ⚠️ **O seed apaga tudo antes de recriar** — banco *e* bucket. Por isso ele exige
-> `RUN_SEED="true"` e se recusa a rodar com `NODE_ENV=production`. As fotos vêm do
-> `picsum.photos`, então a primeira execução precisa de internet.
+> `RUN_SEED="true"` e se recusa a rodar com `NODE_ENV=production`.
 
 ---
 
