@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏗️ API — IMOBILIÁRIA
+# 🏗️ API — Imobiliária
 
 **Esse back-end tirou uma imobiliária inteira da galeria do celular.**
 
