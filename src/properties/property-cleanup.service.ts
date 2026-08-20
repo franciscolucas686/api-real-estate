@@ -1,7 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import pLimit from 'p-limit';
 import { PrismaService } from '../prisma/prisma.service';
 import { PropertyImagesService } from './property-images.service';
+
+/**
+ * Quantos imóveis têm as fotos apagadas do R2 em paralelo.
+ *
+ * Baixo de propósito: este job roda de madrugada, sem ninguém esperando, e o custo de
+ * ser lento é zero — enquanto o custo de saturar o R2 com a transação aberta não é.
+ */
+const R2_CLEANUP_CONCURRENCY = 4;
 
 @Injectable()
 export class PropertyCleanupService {
@@ -42,9 +51,17 @@ export class PropertyCleanupService {
 
         if (expiredProperties.length === 0) return;
 
+        // Com limite de concorrência, não `Promise.all` solto: cada
+        // `deleteAllPropertyImagesFromR2` dispara dois `deleteObjectsByPrefix`, e cada
+        // um deles é um laço paginado de List + Delete no R2. Sem o limite, N imóveis
+        // expirados no mesmo dia viram 2N laços simultâneos — com a transação aberta e
+        // o advisory lock na mão o tempo todo. Na operação normal N é 0 ou 1; o limite
+        // existe para o dia da limpeza acumulada, em que estourar o timeout de 5min da
+        // transação reverteria o `deleteMany` com objetos já apagados no R2.
+        const limit = pLimit(R2_CLEANUP_CONCURRENCY);
         await Promise.all(
           expiredProperties.map((p) =>
-            this.propertyImagesService.deleteAllPropertyImagesFromR2(p.id),
+            limit(() => this.propertyImagesService.deleteAllPropertyImagesFromR2(p.id)),
           ),
         );
 

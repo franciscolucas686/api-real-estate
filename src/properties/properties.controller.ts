@@ -14,12 +14,15 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import type { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
+import { PropertyStatus } from '@prisma/client';
 import {
   ApiBody,
   ApiConsumes,
   ApiOperation,
   ApiParam,
   ApiResponse,
+  ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
@@ -28,13 +31,15 @@ import { CurrentUserDto } from '../auth/dto/current-user.dto';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 import { OptionalJwtGuard } from '../auth/guards/optional-jwt.guard';
 import { CacheKey, CacheTTL, InvalidateCache } from '../common/decorators/cache.decorator';
-import { PropertyImageFileMissingError } from '../common/errors';
+import { InvalidImageFileError, PropertyImageFileMissingError } from '../common/errors';
 import {
   BulkDeletePropertyImagesDto,
   CreatePropertyDto,
   CreatePropertyRoomDto,
   FilterPropertyDto,
+  PropertyListResponseDto,
   ReorderPropertyImagesDto,
+  TrashPaginationDto,
   UpdatePropertyDto,
   UpdatePropertyRoomDto,
   UpdatePropertyStatusDto,
@@ -43,6 +48,40 @@ import { PropertyImagesService } from './property-images.service';
 import { PropertyRoomsService } from './property-rooms.service';
 import { PropertyStatusCountsService } from './property-status-counts.service';
 import { PropertiesService } from './properties.service';
+
+/**
+ * Teto de arquivos por requisição de upload — deliberadamente NÃO um teto de fotos
+ * por imóvel, que não existe: `uploadImages` sempre anexa ao final e nada no código
+ * conta quantas o imóvel já tem. Um imóvel com 50 ou 100 fotos é normal; o que muda
+ * é que elas chegam em lotes.
+ *
+ * O frontend fatia nesse mesmo tamanho (`UPLOAD_BATCH_SIZE` em
+ * `real-estate-app/src/features/properties/api/gallery-patch-service.ts`). Os dois
+ * números precisam concordar — se este diminuir sem o outro acompanhar, o lote do
+ * cliente passa a ser rejeitado com 400.
+ */
+export const UPLOAD_MAX_FILES_PER_REQUEST = 12;
+
+/** ~15MB cobre foto de celular em resolução máxima com folga; acima disso é anômalo. */
+export const UPLOAD_MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024;
+
+/**
+ * Recusa, pelo mimetype declarado, o que claramente não é imagem.
+ *
+ * **Não é controle de segurança** — o mimetype vem do cliente e pode mentir. Quem
+ * garante que o conteúdo é imagem é o `sharp`, que decodifica e reencoda tudo para
+ * JPEG em `PropertyImagesService.compressImage`; um arquivo com extensão mentirosa
+ * morre lá. Isto aqui é ergonomia e economia: falha na hora, com o nome do arquivo,
+ * antes de bufferizar 15MB de PDF à toa.
+ */
+export const imageFileFilter: MulterOptions['fileFilter'] = (_req, file, callback) => {
+  if (!file.mimetype?.startsWith('image/')) {
+    callback(new InvalidImageFileError(file.originalname), false);
+    return;
+  }
+
+  callback(null, true);
+};
 
 @ApiTags('Properties')
 @Controller('properties')
@@ -55,12 +94,59 @@ export class PropertiesController {
   ) {}
 
   @Get('status-counts')
+  @UseGuards(OptionalJwtGuard)
+  @CacheTTL(60_000)
+  @CacheKey('property-status-counts')
+  @ApiOperation({
+    summary: 'Retorna contagem de imóveis por status',
+    description:
+      'Rota pública com autenticação opcional, no mesmo modelo de GET /properties. ' +
+      'Chamadas anônimas recebem apenas a contagem de ACTIVE — é o número que a home ' +
+      'do site exibe ("N imóveis disponíveis agora") e o único que faz sentido expor ' +
+      'publicamente; o tamanho da fila de PENDING/INACTIVE é informação de operação. ' +
+      'Chamadas autenticadas recebem os três status.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Contagem por status (três status para autenticados, só ACTIVE para anônimos)',
+    content: {
+      'application/json': {
+        examples: {
+          autenticado: { summary: 'Autenticado', value: { PENDING: 4, ACTIVE: 27, INACTIVE: 2 } },
+          anonimo: { summary: 'Anônimo', value: { ACTIVE: 27 } },
+        },
+      },
+    },
+  })
+  async getStatusCounts(@CurrentUser() user: CurrentUserDto | undefined) {
+    const counts = await this.propertyStatusCountsService.getStatusCounts();
+
+    if (user) return counts;
+
+    return { [PropertyStatus.ACTIVE]: counts[PropertyStatus.ACTIVE] };
+  }
+
+  @Get('trash')
   @UseGuards(JwtGuard)
-  @ApiOperation({ summary: 'Retorna contagem de imóveis por status' })
-  @ApiResponse({ status: 200, description: 'Contagem por status' })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async getStatusCounts() {
-    return this.propertyStatusCountsService.getStatusCounts();
+  @ApiSecurity('cookie')
+  @ApiOperation({
+    summary: 'Lista os imóveis na lixeira',
+    description:
+      'Imóveis excluídos (soft delete), do mais recentemente excluído para o mais antigo. ' +
+      'Depois de 30 dias o job diário os remove em definitivo, junto com as fotos no R2 — ' +
+      'o prazo restante é calculado pelo cliente a partir de `deletedAt`, e um imóvel ' +
+      'vencido que o job ainda não recolheu continua listado (e restaurável) de propósito. ' +
+      'Rota separada da listagem normal: aquela atende visitante anônimo, e um parâmetro ' +
+      'que ampliasse o escopo por lá seria uma chance de vazar inventário.',
+  })
+  @ApiResponse({
+    status: 200,
+    type: PropertyListResponseDto,
+    description: 'Página de imóveis excluídos, com deletedAt preenchido',
+  })
+  @ApiResponse({ status: 401, description: 'Não autenticado' })
+  async findTrash(@Query() pagination: TrashPaginationDto) {
+    return this.propertiesService.findDeleted(pagination.skip, pagination.take);
   }
 
   @Post()
@@ -78,13 +164,23 @@ export class PropertiesController {
 
   @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @Get()
+  @UseGuards(OptionalJwtGuard)
   @CacheTTL(300_000)
   @CacheKey('properties-list')
-  @ApiOperation({ summary: 'Listar propriedades com filtros' })
+  @ApiOperation({
+    summary: 'Listar propriedades com filtros',
+    description:
+      'Rota pública com autenticação opcional, no mesmo modelo de GET /properties/:id. ' +
+      'Chamadas anônimas recebem apenas imóveis ACTIVE, independentemente do filtro ?status= ' +
+      'enviado; chamadas autenticadas enxergam todos os status e podem filtrar por qualquer um.',
+  })
   @ApiResponse({ status: 200, description: 'Lista de propriedades retornada' })
   @ApiResponse({ status: 400, description: 'Filtros inválidos' })
-  async findAll(@Query() filters: FilterPropertyDto) {
-    return this.propertiesService.findAll(filters);
+  async findAll(
+    @Query() filters: FilterPropertyDto,
+    @CurrentUser() user: CurrentUserDto | undefined,
+  ) {
+    return this.propertiesService.findAll(filters, !!user);
   }
 
   @Throttle({ default: { ttl: 60_000, limit: 120 } })
@@ -101,7 +197,8 @@ export class PropertiesController {
     return this.propertiesService.findOne(id, !!user);
   }
 
-  @Throttle({ default: { ttl: 3600_000, limit: 60 } })
+  // 120/hora por usuário: um operador editando fichas em sequência encostava nos 60.
+  @Throttle({ default: { ttl: 3600_000, limit: 120 } })
   @Patch(':id')
   @UseGuards(JwtGuard)
   @InvalidateCache('/properties')
@@ -114,7 +211,6 @@ export class PropertiesController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updatePropertyDto: UpdatePropertyDto,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     return this.propertiesService.update(id, updatePropertyDto);
   }
@@ -129,8 +225,8 @@ export class PropertiesController {
   @ApiResponse({ status: 204, description: 'Propriedade deletada' })
   @ApiResponse({ status: 404, description: 'Propriedade não encontrada' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
-  async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: CurrentUserDto) {
-    await this.propertiesService.remove(id, user.id);
+  async remove(@Param('id', ParseUUIDPipe) id: string) {
+    await this.propertiesService.remove(id);
   }
 
   @Patch(':id/restore')
@@ -164,9 +260,20 @@ export class PropertiesController {
   @HttpCode(201)
   @UseGuards(JwtGuard)
   @InvalidateCache('/properties')
+  // Limite por REQUISIÇÃO, não por imóvel: não há teto de fotos por imóvel em
+  // lugar nenhum, e o cliente envia 50 fotos em lotes de UPLOAD_BATCH_SIZE.
+  //
+  // O Multer bufferiza em memória todos os arquivos da requisição antes do handler
+  // rodar, e eles ficam vivos até ela terminar — é esse buffer, não o Sharp, que
+  // domina o pico de memória. Com 50 por requisição eram ~200MB só de origem, o
+  // que não deixa margem para dois corretores subindo fotos ao mesmo tempo.
+  //
+  // fileSize é a proteção que não existia: sem ela um único arquivo de 200MB é
+  // aceito e carregado inteiro na memória, derrubando o processo sozinho.
   @UseInterceptors(
-    FilesInterceptor('images', 50, {
-      limits: { files: 50 },
+    FilesInterceptor('images', UPLOAD_MAX_FILES_PER_REQUEST, {
+      limits: { files: UPLOAD_MAX_FILES_PER_REQUEST, fileSize: UPLOAD_MAX_FILE_SIZE_BYTES },
+      fileFilter: imageFileFilter,
     }),
   )
   @ApiConsumes('multipart/form-data')
@@ -199,7 +306,6 @@ export class PropertiesController {
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @UploadedFiles() files: Express.Multer.File[],
     @Body('roomId') roomId: string | undefined,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     if (!files?.length) {
       throw new PropertyImageFileMissingError();
@@ -208,7 +314,9 @@ export class PropertiesController {
     return this.propertyImagesService.uploadImages(propertyId, files, roomId || undefined);
   }
 
-  @Throttle({ default: { ttl: 3600_000, limit: 30 } })
+  // Um teto horário num endpoint de lote anula o motivo de ele ser em lote: limpar
+  // três galerias grandes numa tarde já batia nos 30/hora. 60/60s por usuário.
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @Delete(':propertyId/images')
   @HttpCode(204)
   @UseGuards(JwtGuard)
@@ -223,7 +331,6 @@ export class PropertiesController {
   async bulkDeleteImages(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @Body() dto: BulkDeletePropertyImagesDto,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     await this.propertyImagesService.bulkDeleteImages(propertyId, dto);
   }
@@ -241,9 +348,8 @@ export class PropertiesController {
   async deleteImage(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @Param('imageId', ParseUUIDPipe) imageId: string,
-    @CurrentUser() user: CurrentUserDto,
   ) {
-    await this.propertyImagesService.deleteImage(imageId, user.id);
+    await this.propertyImagesService.deleteImage(propertyId, imageId);
   }
 
   // === ROOM ENDPOINTS ===
@@ -261,7 +367,6 @@ export class PropertiesController {
   async createRoom(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @Body() dto: CreatePropertyRoomDto,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     return this.propertyRoomsService.createRoom(propertyId, dto);
   }
@@ -280,7 +385,6 @@ export class PropertiesController {
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @Param('roomId', ParseUUIDPipe) roomId: string,
     @Body() dto: UpdatePropertyRoomDto,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     return this.propertyRoomsService.updateRoom(propertyId, roomId, dto);
   }
@@ -298,7 +402,6 @@ export class PropertiesController {
   async deleteRoom(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @Param('roomId', ParseUUIDPipe) roomId: string,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     await this.propertyRoomsService.deleteRoom(propertyId, roomId);
   }
@@ -316,7 +419,6 @@ export class PropertiesController {
   async reorderImages(
     @Param('propertyId', ParseUUIDPipe) propertyId: string,
     @Body() dto: ReorderPropertyImagesDto,
-    @CurrentUser() user: CurrentUserDto,
   ) {
     return this.propertyImagesService.reorderImages(propertyId, dto);
   }

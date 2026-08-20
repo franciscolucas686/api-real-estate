@@ -28,14 +28,4 @@ export class UsersService {
       },
     });
   }
-
-  async updateRefreshToken(userId: string, refreshToken: string | null, expiresAt?: Date) {
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        refreshToken,
-        refreshTokenExpiresAt: expiresAt || null,
-      },
-    });
-  }
 }

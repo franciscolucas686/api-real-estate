@@ -52,6 +52,45 @@ export class PropertyCardDto {
   @ApiProperty({ nullable: true })
   parkingSpaces!: number | null;
 
+  /*
+   * Fields below were added so a listing can be rendered without a second request per row.
+   * `suites` in particular was already being selected in `findWithFilters` and silently
+   * dropped in the map — a dead `select` paying a cost for nothing. The rest are columns on
+   * the same table, so they add no join.
+   *
+   * Additive only: every existing consumer keeps working.
+   */
+
+  @ApiProperty({ nullable: true, description: 'Suítes. Já era selecionado e descartado.' })
+  suites!: number | null;
+
+  @ApiProperty({ nullable: true, description: 'Área total em m² — necessária para listas densas.' })
+  totalArea!: number | null;
+
+  @ApiProperty({ nullable: true, description: 'Área construída em m².' })
+  builtArea!: number | null;
+
+  @ApiProperty({ type: String, nullable: true, description: 'Valor do condomínio.' })
+  condoFee!: string | null;
+
+  @ApiProperty({
+    description:
+      'Data de criação. Sem ela não existe coluna "publicado em" nem ordenação por data no cliente.',
+    example: '2026-07-18T00:00:00.000Z',
+  })
+  createdAt!: Date;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Quando o imóvel foi movido para a lixeira. Sempre null nas listagens normais — ' +
+      'só a rota GET /properties/trash devolve cards com valor aqui, e é a partir dele ' +
+      'que se calcula quanto resta dos 30 dias de retenção.',
+    example: '2026-08-01T00:00:00.000Z',
+  })
+  deletedAt!: Date | null;
+
   @ApiProperty({ type: [PreviewImageDto] })
   previewImages!: PreviewImageDto[];
 }

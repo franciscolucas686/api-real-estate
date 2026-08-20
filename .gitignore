@@ -1,5 +1,6 @@
 # compiled output
 /dist
+/dist-seed
 /node_modules
 /build
 
@@ -27,6 +28,10 @@ lerna-debug.log*
 *.launch
 .settings/
 *.sublime-workspace
+
+# Ferramentas locais de assistente (settings.local.json e afins). Fica fora do repo
+# em qualquer máquina — antes só o ignore global desta aqui o cobria.
+.claude/
 
 # IDE - VSCode
 .vscode/*
@@ -57,7 +62,13 @@ pids
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
+# Notas locais em markdown ficam de fora do repositório (CLAUDE.md, ARCHITECTURE.md
+# e afins). O README é a vitrine do projeto no GitHub, então é a exceção explícita —
+# sem esta linha ele nunca apareceria na página do repositório, e `git add README.md`
+# falharia em silêncio.
 *.md
+!README.md
+
 *.txt
 *.sh
 *.tsbuildinfo

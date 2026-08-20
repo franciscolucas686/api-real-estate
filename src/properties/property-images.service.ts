@@ -3,14 +3,17 @@ import { PropertyImage, PropertyStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
 import sharp from 'sharp';
-import { ImageNotBelongToPropertyError, ImageNotFoundError } from '../common/errors';
+import {
+  ImageNotBelongToPropertyError,
+  ImageNotFoundError,
+  InvalidImageFileError,
+  PropertyNotFoundError,
+  RoomNotBelongToPropertyError,
+  RoomNotFoundError,
+} from '../common/errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../r2/r2.service';
-import {
-  BulkDeletePropertyImagesDto,
-  ReorderPropertyImagesDto,
-  UpdatePropertyImageDto,
-} from './dto';
+import { BulkDeletePropertyImagesDto, ReorderPropertyImagesDto } from './dto';
 
 // Cada imagem só é processada uma vez (sem reaproveitamento), então o cache
 // interno do sharp não traz benefício e só consome memória; e com a
@@ -19,7 +22,12 @@ import {
 sharp.cache(false);
 sharp.concurrency(1);
 
-const IMAGE_PROCESSING_CONCURRENCY = 6;
+// 3, não 6: cada decodificação simultânea segura um bitmap cru na memória (~36MB
+// para uma foto de 12MP), e o gargalo real do upload é a rede do corretor, não a
+// CPU do servidor — dobrar a concorrência dobra o pico de memória sem ganho de
+// tempo perceptível. É o número que mantém o processo dentro de 1GB quando dois
+// uploads acontecem ao mesmo tempo.
+const IMAGE_PROCESSING_CONCURRENCY = 3;
 
 @Injectable()
 export class PropertyImagesService {
@@ -39,15 +47,74 @@ export class PropertyImagesService {
     images: PropertyImage[];
     total: number;
   }> {
-    const lastImage = await this.prisma.propertyImage.findFirst({
-      where: { propertyId },
-      orderBy: { order: 'desc' },
-    });
+    // Destino conferido **antes** do primeiro PUT, no mesmo ida-e-volta do `order`.
+    //
+    // Sem isto o método subia tudo e só descobria o problema no `createMany`: um
+    // `propertyId` inexistente virava violação de FK — 500 para o operador e fotos no
+    // bucket sem linha no banco, invisíveis e sem rotina que as recolha, multiplicadas
+    // a cada nova tentativa. É o mesmo vazamento que separar compressão de upload
+    // fechou para arquivo inválido, entrando pela outra porta.
+    //
+    // O `roomId` é conferido junto porque ele vem do corpo, não da rota: um cômodo de
+    // outro imóvel passava direto pela FK (o id existe) e anexava a foto à galeria
+    // errada, onde ela aparece para os dois imóveis.
+    const [lastImage, property, room] = await Promise.all([
+      this.prisma.propertyImage.findFirst({
+        where: { propertyId },
+        orderBy: { order: 'desc' },
+        select: { order: true, url: true },
+      }),
+      this.prisma.property.findUnique({
+        where: { id: propertyId },
+        select: { id: true, code: true },
+      }),
+      roomId
+        ? this.prisma.propertyRoom.findUnique({
+            where: { id: roomId },
+            select: { propertyId: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (!property) throw new PropertyNotFoundError(propertyId);
+    if (roomId) {
+      if (!room) throw new RoomNotFoundError(roomId);
+      if (room.propertyId !== propertyId) {
+        throw new RoomNotBelongToPropertyError(roomId, propertyId);
+      }
+    }
+
     const startOrder = (lastImage?.order ?? -1) + 1;
 
+    // A pasta no R2 termina com o código do imóvel só quando não há foto
+    // anterior a seguir — um imóvel sem nenhuma foto ainda (novo, ou com todas
+    // já removidas) recebe `{propertyId}-{code}` desde a primeira; uma foto
+    // adicional a um imóvel que já tem fotos reaproveita a pasta que essas
+    // fotos já usam, para não fragmentar a galeria entre duas pastas. Isso
+    // também cobre imóveis antigos (pasta `{propertyId}` sem sufixo) sem
+    // precisar saber, aqui, se o imóvel é "antigo" ou "novo".
+    const folder = lastImage
+      ? this.r2.getObjectKeyFromUrl(lastImage.url).split('/')[0]
+      : `${propertyId}-${property.code}`;
+
+    // Comprimir TUDO antes de subir QUALQUER COISA. As duas etapas já estiveram
+    // juntas num método só, e aí um arquivo inválido no meio do lote deixava lixo:
+    // o `Promise.all` rejeitava, o `createMany` abaixo nunca rodava, e as fotos que
+    // já haviam subido ficavam no bucket sem linha no banco — invisíveis, e
+    // multiplicadas a cada nova tentativa do operador.
+    //
+    // Separando, a falha mais comum (arquivo que não é imagem) acontece antes do
+    // primeiro PUT, e o lote passa a ser atômico sem precisar de transação.
+    // O pico de memória não muda: o `limit` continua governando as decodificações
+    // simultâneas, que é o que custa caro (~36MB de bitmap cru cada). O que se
+    // acumula a mais são os buffers já comprimidos, ~300KB por foto.
+    const compressed = await Promise.all(
+      files.map((file) => this.limit(() => this.compressImage(file))),
+    );
+
     const images = await Promise.all(
-      files.map((file, index) =>
-        this.limit(() => this.processImage(propertyId, file, startOrder + index, roomId)),
+      compressed.map((buffer, index) =>
+        this.uploadCompressedImage(propertyId, folder, buffer, startOrder + index, roomId),
       ),
     );
 
@@ -58,32 +125,6 @@ export class PropertyImagesService {
       images,
       total: images.length,
     };
-  }
-
-  async updateImage(
-    propertyId: string,
-    imageId: string,
-    dto: Omit<UpdatePropertyImageDto, 'roomId'>,
-  ): Promise<PropertyImage> {
-    const image = await this.prisma.propertyImage.findUnique({
-      where: { id: imageId },
-    });
-
-    if (!image) {
-      throw new ImageNotFoundError(imageId);
-    }
-
-    if (image.propertyId !== propertyId) {
-      throw new ImageNotBelongToPropertyError(imageId, propertyId);
-    }
-
-    return this.prisma.propertyImage.update({
-      where: { id: imageId },
-      data: {
-        ...(dto.label !== undefined && { label: dto.label }),
-        ...(dto.order !== undefined && { order: dto.order }),
-      },
-    });
   }
 
   async reorderImages(propertyId: string, dto: ReorderPropertyImagesDto): Promise<PropertyImage[]> {
@@ -130,13 +171,27 @@ export class PropertyImagesService {
     });
   }
 
-  async deleteImage(imageId: string, userId: string) {
+  /**
+   * O `propertyId` da rota é conferido, não ignorado.
+   *
+   * Ele chegava até aqui como um `userId` que o método nunca lia, então
+   * `DELETE /properties/{qualquer-id}/images/{imageId}` apagava a foto de outro
+   * imóvel — o `imageId` sozinho decidia tudo. Não é escalação de privilégio (esta
+   * API é deliberadamente sem isolamento entre usuários autenticados), mas era a
+   * única rota de foto que discordava de `bulkDeleteImages` e `reorderImages`, que
+   * sempre conferiram: uma tela desatualizada apagava silenciosamente a foto errada.
+   */
+  async deleteImage(propertyId: string, imageId: string) {
     const image = await this.prisma.propertyImage.findUnique({
       where: { id: imageId },
     });
 
     if (!image) {
       throw new ImageNotFoundError(imageId);
+    }
+
+    if (image.propertyId !== propertyId) {
+      throw new ImageNotBelongToPropertyError(imageId, propertyId);
     }
 
     await this.deleteImagesFromR2([image]);
@@ -163,41 +218,46 @@ export class PropertyImagesService {
 
     await this.r2.deleteImages(keys);
 
+    // A falha do banco é registrada **e** propagada. Engoli-la devolvia 204 ao
+    // cliente com os objetos já apagados do R2 e as linhas ainda no banco: a galeria
+    // sumia da tela, e no próximo carregamento as fotos voltavam apontando para
+    // arquivos que não existem mais. Um erro visível é pior de ver e melhor de ter —
+    // o operador tenta de novo, e a segunda tentativa é inofensiva porque apagar do
+    // R2 o que já não está lá não falha.
     try {
       await this.prisma.propertyImage.deleteMany({
         where: { id: { in: dto.imageIds } },
       });
-      await this.syncPropertyStatus(propertyId);
     } catch (error) {
       this.logger.error(
         `R2 deletado mas falha ao remover registros do banco para propertyId=${propertyId}:`,
         error,
       );
+      throw error;
     }
+
+    await this.syncPropertyStatus(propertyId);
   }
 
-  async deleteImagesFromR2(images: PropertyImage[]) {
+  private async deleteImagesFromR2(images: PropertyImage[]) {
     const deletePromises = images.map((image) => this.deleteImageFromR2(image));
     await Promise.allSettled(deletePromises);
   }
 
-  async deletePropertyImagesFromR2(propertyId: string): Promise<void> {
-    try {
-      await this.r2.deleteObjectsByPrefix(`${propertyId}/`);
-    } catch (error) {
-      this.logger.warn(`Erro ao deletar imagens do imóvel ${propertyId} do R2:`, error);
-    }
-  }
-
   async deleteAllPropertyImagesFromR2(propertyId: string): Promise<void> {
+    // Sem barra final de propósito: `Property.id` é sempre um UUID de
+    // comprimento fixo, então nunca é prefixo de outro, e o prefixo sozinho
+    // casa tanto a pasta antiga (`{propertyId}/...`) quanto a nova
+    // (`{propertyId}-{code}/...`) numa chamada só — sem precisar saber, aqui,
+    // qual das duas este imóvel usa.
     await Promise.all([
       this.r2
-        .deleteObjectsByPrefix(`${propertyId}/`)
+        .deleteObjectsByPrefix(propertyId)
         .catch((error) =>
           this.logger.warn(`Erro ao deletar imagens ativas do imóvel ${propertyId} do R2:`, error),
         ),
       this.r2
-        .deleteObjectsByPrefix(`deleted/${propertyId}/`)
+        .deleteObjectsByPrefix(`deleted/${propertyId}`)
         .catch((error) =>
           this.logger.warn(
             `Erro ao deletar imagens deletadas do imóvel ${propertyId} do R2:`,
@@ -219,8 +279,11 @@ export class PropertyImagesService {
         this.limit(async () => {
           try {
             const sourceKey = this.r2.getObjectKeyFromUrl(image.url);
-            const fileName = sourceKey.slice(sourceKey.indexOf('/') + 1);
-            const destKey = `deleted/${propertyId}/${fileName}`;
+            // Preserva a pasta real (`{propertyId}` ou `{propertyId}-{code}`)
+            // em vez de reconstruí-la a partir de `propertyId` sozinho — o que
+            // descartaria o sufixo do código de um imóvel novo ao mover para a
+            // lixeira.
+            const destKey = `deleted/${sourceKey}`;
             const newUrl = await this.r2.moveObject(sourceKey, destKey);
             await this.prisma.propertyImage.update({
               where: { id: image.id },
@@ -246,8 +309,10 @@ export class PropertyImagesService {
         this.limit(async () => {
           try {
             const sourceKey = this.r2.getObjectKeyFromUrl(image.url);
-            const fileName = sourceKey.slice(sourceKey.lastIndexOf('/') + 1);
-            const destKey = `${propertyId}/${fileName}`;
+            // Inverso de `movePropertyImagesToDeleted`: só remove o prefixo
+            // `deleted/`, preservando a pasta real em vez de reconstruí-la a
+            // partir de `propertyId` sozinho.
+            const destKey = sourceKey.replace(/^deleted\//, '');
             const newUrl = await this.r2.moveObject(sourceKey, destKey);
             await this.prisma.propertyImage.update({
               where: { id: image.id },
@@ -266,22 +331,41 @@ export class PropertyImagesService {
   // tamanho mínimo de uma parte multipart é 5MB — bem acima do que uma foto
   // comprimida (1920x1080, JPEG 80%) costuma pesar. Streamar aqui adicionaria uma
   // dependência e complexidade sem reduzir o pico de memória real.
-  private async processImage(
+  //
+  // É a etapa que valida o arquivo de fato: o `fileFilter` do controller olha só o
+  // mimetype declarado pelo cliente, enquanto aqui o libvips precisa realmente
+  // decodificar os bytes. Um arquivo corrompido ou com extensão mentirosa morre
+  // neste ponto — antes de qualquer escrita no R2.
+  private async compressImage(file: Express.Multer.File): Promise<Buffer> {
+    try {
+      return await sharp(file.buffer)
+        .rotate()
+        .resize(1920, 1080, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+    } catch (error) {
+      // Sem isto o erro cru do sharp cai no ramo genérico do AllExceptionsFilter e
+      // vira um 500 "Erro interno do servidor" — que não diz ao operador qual foto
+      // recusou nem por quê.
+      this.logger.warn(
+        `Arquivo rejeitado pelo processamento de imagem: ${file.originalname}`,
+        error,
+      );
+      throw new InvalidImageFileError(file.originalname);
+    }
+  }
+
+  private async uploadCompressedImage(
     propertyId: string,
-    file: Express.Multer.File,
+    folder: string,
+    compressedBuffer: Buffer,
     order: number,
     roomId?: string,
   ): Promise<PropertyImage> {
-    const compressedBuffer = await sharp(file.buffer)
-      .rotate()
-      .resize(1920, 1080, {
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .jpeg({ quality: 80 })
-      .toBuffer();
-
-    const key = `${propertyId}/${randomUUID()}.jpg`;
+    const key = `${folder}/${randomUUID()}.jpg`;
     const url = await this.r2.uploadImage(compressedBuffer, key, 'image/jpeg');
 
     return {

@@ -1,0 +1,13 @@
+// Projeto TypeScript usado SÓ pelo ESLint.
+//
+// O tsconfig.json principal inclui apenas `src`, porque é ele que define o que o
+// `nest build` compila para `dist`. As regras com tipagem do typescript-eslint
+// (`no-floating-promises` e afins) exigem que todo arquivo lintado pertença a algum
+// projeto — então, sem este arquivo, incluir `test/**` no lint dá "The file was not
+// found in any of the provided project(s)" nos cinco specs e2e.
+//
+// Ampliar o `include` do tsconfig.json em vez disto arrastaria os testes para o build.
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*", "test/**/*", "prisma/**/*.ts"]
+}

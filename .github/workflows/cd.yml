@@ -1,11 +1,16 @@
-# Este workflow NÃO faz deploy e NÃO roda `prisma migrate deploy` contra produção.
-# Seu único propósito é produzir um status check no commit exato que cai na `main`,
-# para o Render (configurado em modo "After CI Checks Pass") saber que pode
-# buildar/deployar com segurança. O `render-build` (package.json) já roda
-# `prisma migrate deploy` como parte do próprio build do Render — duplicar isso
-# aqui exigiria credenciais de produção como GitHub Secret sem nenhum benefício.
+# Portão + deploy da produção, nesta ordem e numa execução só.
 #
-# O Postgres/.env.test usado aqui é uma instância efêmera e isolada, sem
+# O job `deploy` declara `needs: verify`, então ele não pode começar antes do gate
+# passar — a dependência é real, não uma corrida entre dois workflows. Era assim
+# que o arranjo anterior funcionava com o Render, que lia o status check pela API
+# do GitHub; com o Fly o deploy é nosso, então a ordem vira explícita aqui.
+#
+# Este workflow continua NÃO rodando `prisma migrate deploy` contra produção. Quem
+# faz isso é o `release_command` do fly.toml, que roda depois do build e antes de a
+# versão nova receber tráfego — trazer a migração para cá exigiria a DATABASE_URL de
+# produção como GitHub Secret sem nenhum benefício.
+#
+# O Postgres/.env.test usado no gate é uma instância efêmera e isolada, sem
 # nenhuma relação com o banco de produção.
 name: CD
 
@@ -13,10 +18,17 @@ on:
   push:
     branches: [main]
 
+# Nada aqui escreve no repositório: o deploy se autentica no Fly com o FLY_API_TOKEN,
+# não com o token do GitHub. O default do token vem da configuração do repositório/org
+# e costuma ser read-write.
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -50,21 +62,15 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Format check
+        run: npm run format:check
+
       - name: Build
         run: npm run build
 
+      # Mesmo arquivo versionado que o README manda copiar — ver a nota no ci.yml.
       - name: Write .env.test
-        run: |
-          cat > .env.test <<'EOF'
-          NODE_ENV=test
-          PORT=3001
-          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app_test
-          CORS_ORIGIN=http://localhost:3000
-          JWT_SECRET=test-jwt-secret-must-be-at-least-32-chars!
-          JWT_REFRESH_SECRET=test-refresh-secret-must-be-at-least-32!!
-          ADMIN_SECRET=test-admin-secret-must-be-at-least-32-ch!
-          RUN_SEED=true
-          EOF
+        run: cp .env.test.example .env.test
 
       - name: Migrate test database
         run: npm run db:migrate:test
@@ -77,3 +83,25 @@ jobs:
 
       - name: E2E tests
         run: npm run test:e2e
+
+  deploy:
+    name: deploy
+    needs: verify
+    runs-on: ubuntu-latest
+    # Um deploy por vez: dois pushes seguidos na main não podem disputar a mesma
+    # máquina, e o `release_command` do fly.toml roda migração — duas execuções
+    # simultâneas de `prisma migrate deploy` contra o mesmo banco é o pior caso.
+    concurrency: deploy-group
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # Pinado em `v1` em vez de `master`: esta action roda com o FLY_API_TOKEN no
+      # ambiente, então seguir um branch móvel entrega deploy de produção a qualquer
+      # commit que apareça no upstream.
+      - uses: superfly/flyctl-actions/setup-flyctl@v1
+
+      - name: Deploy to Fly
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

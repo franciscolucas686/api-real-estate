@@ -26,6 +26,21 @@ interface ErrorResponse {
   error: string;
 }
 
+/**
+ * Codes estáveis para exceptions que o Nest levanta antes de qualquer código nosso
+ * rodar, e que por isso não têm como carregar um `code` próprio.
+ *
+ * O caso concreto é o upload: o Multer rejeita arquivo acima do limite e o
+ * `@nestjs/platform-express` traduz para `PayloadTooLargeException`, cuja mensagem
+ * é o literal em inglês "File too large". Sem um code, `getErrorMessage` no
+ * frontend cai no passthrough e mostra isso ao corretor. Com ele, a mensagem é
+ * traduzida do lado do cliente como qualquer outro erro de domínio.
+ */
+const STATUS_CODES: Record<number, string> = {
+  [HttpStatus.PAYLOAD_TOO_LARGE]: 'PAYLOAD_TOO_LARGE',
+  [HttpStatus.UNSUPPORTED_MEDIA_TYPE]: 'UNSUPPORTED_MEDIA_TYPE',
+};
+
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger('ExceptionFilter');
@@ -70,21 +85,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     if (exception instanceof HttpException) {
+      const status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
       if (typeof exceptionResponse === 'object') {
         const responseObj = exceptionResponse as HttpExceptionResponseBody;
         return {
-          status: exception.getStatus(),
+          status,
           message: responseObj.message || 'Erro na requisição',
           errorType: responseObj.error || exception.name,
-          code: responseObj.code || 'HTTP_EXCEPTION',
+          code: responseObj.code || STATUS_CODES[status] || 'HTTP_EXCEPTION',
         };
       }
       return {
-        status: exception.getStatus(),
+        status,
         message: exceptionResponse as string,
         errorType: exception.name,
-        code: 'HTTP_EXCEPTION',
+        code: STATUS_CODES[status] || 'HTTP_EXCEPTION',
       };
     }
 

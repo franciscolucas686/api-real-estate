@@ -13,7 +13,7 @@ export class SiteSettingsController {
   @ApiOperation({
     summary: 'Obter configurações do site',
     description:
-      'Retorna as configurações globais do site (WhatsApp, e-mail, telefone, horário de atendimento). ' +
+      'Retorna as configurações globais do site (WhatsApp, e-mail, Instagram, horário de atendimento). ' +
       'Este endpoint é público — não requer autenticação, pois os dados são exibidos na página de contato para todos os visitantes.',
   })
   @ApiResponse({
@@ -26,7 +26,7 @@ export class SiteSettingsController {
           id: 'singleton',
           whatsapp: '11987654321',
           email: 'contato@imobiliaria.com',
-          phone: '1132104500',
+          instagram: 'francinegestora',
           hours: 'Seg–Sex: 9h às 18h | Sáb: 9h às 13h',
           updatedAt: '2026-06-18T01:15:00.000Z',
         },
@@ -55,7 +55,7 @@ export class SiteSettingsController {
         value: {
           whatsapp: '11987654321',
           email: 'contato@imobiliaria.com',
-          phone: '1132104500',
+          instagram: 'francinegestora',
           hours: 'Seg–Sex: 9h às 18h | Sáb: 9h às 13h',
         },
       },
@@ -63,6 +63,13 @@ export class SiteSettingsController {
         summary: 'Atualizar apenas o WhatsApp',
         value: {
           whatsapp: '11999990000',
+        },
+      },
+      limparInstagram: {
+        summary: 'Limpar o Instagram',
+        description: 'String vazia é o valor de "não configurado" — omitir o campo mantém o atual.',
+        value: {
+          instagram: '',
         },
       },
       atualizarHorario: {
@@ -83,9 +90,24 @@ export class SiteSettingsController {
           id: 'singleton',
           whatsapp: '11999990000',
           email: 'contato@imobiliaria.com',
-          phone: '1132104500',
+          instagram: 'francinegestora',
           hours: 'Seg–Sex: 9h às 18h | Sáb: 9h às 13h',
           updatedAt: '2026-06-18T03:00:00.000Z',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Handle de Instagram fora do formato aceito',
+    content: {
+      'application/json': {
+        example: {
+          statusCode: 400,
+          code: 'VALIDATION_ERROR',
+          message: [
+            'Instagram deve conter apenas letras, números, ponto e underline (até 30 caracteres), sem "@"',
+          ],
         },
       },
     },

@@ -12,6 +12,9 @@ import { ConfigService } from '../config/config.service';
 
 @Injectable()
 export class R2Service {
+  /** Teto do `DeleteObjects` do S3/R2. Ver `deleteImages`. */
+  private static readonly DELETE_BATCH_SIZE = 1000;
+
   private readonly client: S3Client | null = null;
   private readonly bucketName: string | null = null;
   private readonly publicBaseUrl: string | null = null;
@@ -69,19 +72,31 @@ export class R2Service {
     );
   }
 
+  /**
+   * `DeleteObjects` aceita no máximo 1000 chaves por chamada — é limite do protocolo
+   * S3, não escolha nossa, e o R2 o aplica igual. `bulkDeleteImages` repassa a lista
+   * que o cliente mandou, e nada a limita: uma galeria grande selecionada inteira
+   * estourava o teto e a requisição falhava por completo, depois de já ter validado
+   * tudo. Fatiar aqui é o lugar certo — o chamador não tem por que conhecer o limite.
+   *
+   * Sequencial de propósito: apagar foto não é caminho quente, e paralelizar só
+   * trocaria uma falha previsível por picos contra o R2.
+   */
   async deleteImages(keys: string[]): Promise<void> {
     if (keys.length === 0) return;
 
     const { client, bucketName } = this.getConfigured();
 
-    const objects = keys.map((key) => ({ Key: key }));
+    for (let i = 0; i < keys.length; i += R2Service.DELETE_BATCH_SIZE) {
+      const objects = keys.slice(i, i + R2Service.DELETE_BATCH_SIZE).map((key) => ({ Key: key }));
 
-    await client.send(
-      new DeleteObjectsCommand({
-        Bucket: bucketName,
-        Delete: { Objects: objects },
-      }),
-    );
+      await client.send(
+        new DeleteObjectsCommand({
+          Bucket: bucketName,
+          Delete: { Objects: objects },
+        }),
+      );
+    }
   }
 
   getObjectKeyFromUrl(imageUrl: string): string {
@@ -120,31 +135,6 @@ export class R2Service {
     );
 
     return `${publicBaseUrl}/${destinationKey}`;
-  }
-
-  async listObjectsByPrefix(prefix: string): Promise<string[]> {
-    const { client, bucketName } = this.getConfigured();
-
-    const keys: string[] = [];
-    let continuationToken: string | undefined;
-
-    do {
-      const list = await client.send(
-        new ListObjectsV2Command({
-          Bucket: bucketName,
-          Prefix: prefix,
-          ContinuationToken: continuationToken,
-        }),
-      );
-
-      for (const obj of list.Contents ?? []) {
-        if (obj.Key) keys.push(obj.Key);
-      }
-
-      continuationToken = list.IsTruncated ? list.NextContinuationToken : undefined;
-    } while (continuationToken);
-
-    return keys;
   }
 
   async deleteObjectsByPrefix(prefix: string): Promise<void> {
