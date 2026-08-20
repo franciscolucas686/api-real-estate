@@ -374,6 +374,7 @@ pior caso possível.
 Desenvolvedor em transição de carreira, construindo software para resolver problemas reais de
 negócios reais. Este projeto nasceu de uma imobiliária que precisava sair da galeria do celular.
 
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-conectar-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/francisco-lucas-dev/)
 [![GitHub](https://img.shields.io/badge/GitHub-seguir-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/franciscolucas686)
 [![Email](https://img.shields.io/badge/Email-falar-EA4335?style=for-the-badge&logo=gmail&logoColor=white)](mailto:franciscolucas686@gmail.com)
 
