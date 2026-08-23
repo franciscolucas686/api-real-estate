@@ -101,6 +101,12 @@ model Property {
   latitude       Decimal?           @db.Decimal(10, 7) /// Coordenada geográfica: latitude com precisão de 7 casas decimais
   longitude      Decimal?           @db.Decimal(11, 7) /// Coordenada geográfica: longitude com precisão de 7 casas decimais
   description    String
+  /// Nome do proprietário do imóvel. Dado privado: nunca sai de `findOne` para uma chamada
+  /// anônima — ver `ownerContactFor` em src/properties/property-visibility.ts.
+  ownerName      String?
+  /// WhatsApp do proprietário, somente dígitos e sem DDI — mesma forma de
+  /// `WhatsappNumber.number`. Privado pela mesma regra que `ownerName`.
+  ownerPhone     String?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
   deletedAt      DateTime?
