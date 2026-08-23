@@ -137,6 +137,29 @@ export class CreatePropertyDto {
   @Type(() => Number)
   parkingSpaces?: number;
 
+  @ApiProperty({
+    example: 'Maria Silva',
+    description:
+      'Nome do proprietário do imóvel. **Dado privado**: só é devolvido por ' +
+      'GET /properties/:id a quem está autenticado — ver `ownerContactFor`.',
+  })
+  @IsString({ message: 'Nome do proprietário deve ser uma string' })
+  @MinLength(2, { message: 'Nome do proprietário deve ter no mínimo 2 caracteres' })
+  ownerName!: string;
+
+  @ApiProperty({
+    example: '11987654321',
+    description:
+      'WhatsApp do proprietário, somente dígitos e sem DDI. **Dado privado**, mesma ' +
+      'regra de `ownerName`. Mesmo formato exigido em CreateWhatsappNumberDto.number.',
+    pattern: '^\\d{8,15}$',
+  })
+  @IsString({ message: 'WhatsApp do proprietário deve ser uma string' })
+  @Matches(/^\d{8,15}$/, {
+    message: 'WhatsApp do proprietário deve conter apenas dígitos e ter entre 8 e 15 caracteres',
+  })
+  ownerPhone!: string;
+
   @ApiProperty({ example: 'Brooklin', description: 'Nome do bairro' })
   @IsString({ message: 'Bairro deve ser uma string' })
   @MinLength(2, { message: 'Bairro deve ter no mínimo 2 caracteres' })

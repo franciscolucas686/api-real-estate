@@ -9,7 +9,9 @@ import { R2Service } from '../src/r2/r2.service';
 import { createAppValidationPipe } from '../src/common/pipes/app-validation.pipe';
 
 /**
- * End-to-end coverage for `GET /properties`.
+ * End-to-end coverage for `GET /properties`, mais a fronteira de dado privado de
+ * `GET /properties/:id` (ver o último `describe`) — que precisa de duas requisições HTTP
+ * reais em identidades diferentes, e por isso mora aqui e não num spec de serviço.
  *
  * This exists for one behaviour that **no unit test can reach**: the response cache.
  *
@@ -183,5 +185,113 @@ describe('Properties list (e2e)', () => {
   it('rejeita query param desconhecido com 400 — forbidNonWhitelisted', async () => {
     // O motivo pelo qual o backend precisa ir para produção antes do frontend.
     await anon('inventado=1').expect(400);
+  });
+  /**
+   * O contato do proprietário é privado, e a proteção tem de ser do **backend**.
+   *
+   * `properties.service.spec.ts` já prova que `findOne` recorta o campo; o que só um teste
+   * ponta a ponta prova é que a cadeia inteira concorda — `OptionalJwtGuard` popula (ou não)
+   * `request.user`, o controller deriva `!!user`, o serviço serializa. Esconder no cliente
+   * não seria proteção nenhuma: o JSON estaria lá para quem abrisse o DevTools.
+   */
+  describe('dados do proprietário em GET /properties/:id', () => {
+    const ownerName = 'Maria Proprietária';
+    const ownerPhone = '11987654321';
+    let propertyId: string;
+
+    beforeAll(async () => {
+      const created = await request(app.getHttpServer())
+        .post('/properties')
+        .set('Cookie', accessToken)
+        .send({
+          description: 'Terreno criado pelo e2e para checar o contato do proprietário',
+          type: 'LAND',
+          businessType: 'SALE',
+          saleTypes: ['DIRECT'],
+          price: '100000.00',
+          totalArea: 500,
+          neighborhood: 'Centro',
+          city: 'Sorocaba',
+          state: 'SP',
+          ownerName,
+          ownerPhone,
+          land: { zoning: 'RESIDENTIAL', topography: 'FLAT' },
+        })
+        .expect(201);
+
+      propertyId = (created.body as { id: string }).id;
+    });
+
+    it('o autenticado recebe nome e telefone', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/properties/${propertyId}`)
+        .set('Cookie', accessToken)
+        .expect(200);
+
+      expect((res.body as { owner: unknown }).owner).toEqual({
+        name: ownerName,
+        phone: ownerPhone,
+      });
+    });
+
+    it('o anônimo recebe owner null, e o telefone não aparece em lugar nenhum do corpo', async () => {
+      // O imóvel nasce PENDING (sem fotos), então um anônimo não o enxerga pelo id — é o
+      // recorte de inventário, não o de proprietário. Publicar primeiro é o que faz este
+      // teste medir o que ele diz medir.
+      await request(app.getHttpServer())
+        .patch(`/properties/${propertyId}/status`)
+        .set('Cookie', accessToken)
+        .send({ status: 'ACTIVE' })
+        .expect(200);
+
+      const res = await request(app.getHttpServer()).get(`/properties/${propertyId}`).expect(200);
+
+      expect((res.body as { owner: unknown }).owner).toBeNull();
+      // A asserção que importa: não basta o campo vir null, o valor não pode estar em
+      // nenhum outro canto da resposta.
+      expect(JSON.stringify(res.body)).not.toContain(ownerPhone);
+      expect(JSON.stringify(res.body)).not.toContain(ownerName);
+    });
+
+    it('o PATCH atualiza os dois campos', async () => {
+      // Caminho separado do POST, e a distinção não é acadêmica: `createWithRetry` monta o
+      // `data` do Prisma campo a campo (uma allowlist), enquanto o `update` espalha o DTO.
+      // Esquecer a allowlist gravava um imóvel sem proprietário em silêncio — foi assim que
+      // este teste nasceu.
+      await request(app.getHttpServer())
+        .patch(`/properties/${propertyId}`)
+        .set('Cookie', accessToken)
+        .send({ ownerName: 'Outro Dono', ownerPhone: '11912345678' })
+        .expect(200);
+
+      const res = await request(app.getHttpServer())
+        .get(`/properties/${propertyId}`)
+        .set('Cookie', accessToken)
+        .expect(200);
+
+      expect((res.body as { owner: unknown }).owner).toEqual({
+        name: 'Outro Dono',
+        phone: '11912345678',
+      });
+    });
+
+    it('criar sem os dados do proprietário é recusado com 400', async () => {
+      await request(app.getHttpServer())
+        .post('/properties')
+        .set('Cookie', accessToken)
+        .send({
+          description: 'Terreno sem proprietário, que a validação precisa recusar',
+          type: 'LAND',
+          businessType: 'SALE',
+          saleTypes: ['DIRECT'],
+          price: '100000.00',
+          totalArea: 500,
+          neighborhood: 'Centro',
+          city: 'Sorocaba',
+          state: 'SP',
+          land: { zoning: 'RESIDENTIAL', topography: 'FLAT' },
+        })
+        .expect(400);
+    });
   });
 });

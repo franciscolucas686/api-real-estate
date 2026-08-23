@@ -40,6 +40,7 @@ describe('PropertiesService', () => {
     property: {
       create: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
       update: jest.fn(),
@@ -53,7 +54,7 @@ describe('PropertiesService', () => {
   const mockPropertyImagesService = {
     movePropertyImagesToDeleted: jest.fn(),
   };
-  const mockWhatsappService = {};
+  const mockWhatsappService = { getWhatsappNumber: jest.fn() };
   const mockEventEmitter = { emit: jest.fn() };
   const mockGeocodingService = { reverseGeocode: jest.fn() };
   const mockPropertyStatusService = {
@@ -693,6 +694,83 @@ describe('PropertiesService', () => {
       await service.findAll({}, true);
 
       expect(whereUsed()).toMatchObject({ deletedAt: null });
+    });
+  });
+  describe('findOne — contato do proprietário', () => {
+    /**
+     * A linha que o Prisma devolve traz `ownerName`/`ownerPhone` **sempre** — o `include` de
+     * `findOne` não recorta escalares. É exatamente por isso que a regra é de serialização e
+     * não de busca, e é isso que estes casos provam: o dado está em mãos, e mesmo assim não
+     * sai para quem não está autenticado.
+     */
+    function propertyRow() {
+      return {
+        id: 'prop-1',
+        code: '0001',
+        type: PropertyType.LAND,
+        businessType: BusinessType.SALE,
+        status: PropertyStatus.ACTIVE,
+        saleTypes: [],
+        price: null,
+        rentPrice: null,
+        condoFee: null,
+        description: 'Descrição válida com mais de dez caracteres',
+        totalArea: 500,
+        builtArea: null,
+        bedrooms: null,
+        bathrooms: null,
+        suites: null,
+        parkingSpaces: null,
+        latitude: null,
+        longitude: null,
+        ownerName: 'Maria Silva',
+        ownerPhone: '11987654321',
+        images: [],
+        rooms: [],
+        house: null,
+        apartment: null,
+        smallfarm: null,
+        countryhouse: null,
+        land: { zoning: Zoning.RESIDENTIAL, topography: Topography.FLAT },
+        neighborhood: {
+          displayName: 'Centro',
+          city: 'Sorocaba',
+          state: 'SP',
+          locationCache: null,
+        },
+        userId: 'user-1',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    }
+
+    beforeEach(() => {
+      mockPrismaService.property.findFirst.mockResolvedValue(propertyRow());
+      mockWhatsappService.getWhatsappNumber.mockResolvedValue('11999999999');
+    });
+
+    it('chamada anônima não recebe o contato do proprietário, mesmo com as colunas preenchidas', async () => {
+      const detail = await service.findOne('prop-1', false);
+
+      expect(detail.owner).toBeNull();
+      // A prova de que é o `owner` que foi recortado, e não a leitura inteira que falhou.
+      expect(detail.whatsappContact).toBe('11999999999');
+    });
+
+    it('chamada autenticada recebe nome e telefone', async () => {
+      const detail = await service.findOne('prop-1', true);
+
+      expect(detail.owner).toEqual({ name: 'Maria Silva', phone: '11987654321' });
+    });
+
+    it('imóvel anterior à migração devolve null mesmo para autenticado', async () => {
+      mockPrismaService.property.findFirst.mockResolvedValue({
+        ...propertyRow(),
+        ownerName: null,
+        ownerPhone: null,
+      });
+
+      await expect(service.findOne('prop-1', true)).resolves.toMatchObject({ owner: null });
     });
   });
 });

@@ -17,7 +17,7 @@ import {
   PropertyNotFoundError,
 } from '../common/errors';
 import { PropertyStatusService } from './property-status.service';
-import { publicVisibilityWhere } from './property-visibility';
+import { ownerContactFor, publicVisibilityWhere } from './property-visibility';
 import { GeocodingService } from '../geocoding/geocoding.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
@@ -267,6 +267,8 @@ export class PropertiesService {
         rentPrice: propertyData.rentPrice,
         condoFee: propertyData.condoFee,
         description: propertyData.description,
+        ownerName: propertyData.ownerName,
+        ownerPhone: propertyData.ownerPhone,
         totalArea: propertyData.totalArea,
         builtArea: propertyData.builtArea,
         bedrooms: propertyData.bedrooms,
@@ -751,6 +753,9 @@ export class PropertiesService {
           }
         : null,
       whatsappContact: whatsappNumber,
+      // A única fronteira de dado privado desta resposta, e ela é da serialização, não da
+      // busca: as colunas vêm do banco em toda leitura — o que decide é esta linha.
+      owner: ownerContactFor(property, isAuthenticated),
       userId: property.userId,
       createdAt: property.createdAt,
       updatedAt: property.updatedAt,

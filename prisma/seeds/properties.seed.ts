@@ -34,6 +34,22 @@ import sharp from 'sharp';
  */
 const PHOTO_DOWNLOAD_CONCURRENCY = 5;
 
+/**
+ * Proprietários da vitrine, gerados pelo índice em vez de escritos em cada uma das dez
+ * definições — são dado de demonstração, não parte do que cada imóvel demonstra.
+ *
+ * Fictícios de propósito: o seed roda num repositório público, e um nome ou telefone real
+ * aqui seria dado pessoal versionado. Os números seguem o formato que a API exige (só
+ * dígitos, sem DDI) para o botão do proprietário funcionar no ambiente local.
+ */
+const DEMO_OWNER_NAMES = [
+  'Maria Aparecida Ramos',
+  'João Batista Nogueira',
+  'Cláudia Menezes',
+  'Roberto Tanaka',
+  'Fernanda Villela',
+];
+
 export type PropertyDef = {
   type: PropertyType;
   businessType: BusinessType;
@@ -469,6 +485,8 @@ export async function seedProperties(
           },
         },
         description: def.description,
+        ownerName: DEMO_OWNER_NAMES[pi % DEMO_OWNER_NAMES.length],
+        ownerPhone: `1198800${String(1000 + pi).slice(-4)}`,
         ...(def.totalArea !== undefined && { totalArea: def.totalArea }),
         ...(def.builtArea !== undefined && { builtArea: def.builtArea }),
         ...(def.bedrooms !== undefined && { bedrooms: def.bedrooms }),

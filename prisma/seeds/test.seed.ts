@@ -44,6 +44,10 @@ export async function seedTest(prisma: PrismaClient): Promise<void> {
       status: PropertyStatus.ACTIVE,
       price: '500000.00',
       description: 'Casa de teste com imagem — usada em specs E2E',
+      // Só este imóvel tem proprietário: os outros dois cobrem o caso das linhas anteriores
+      // à migração, em que `owner` volta null mesmo para quem está autenticado.
+      ownerName: 'Maria Proprietária',
+      ownerPhone: '11987654321',
       house: { create: { floors: 1, isInCondominium: false } },
       saleTypes: { create: [{ type: SaleType.DIRECT }] },
     },
