@@ -10,7 +10,7 @@ import { Prisma } from '@prisma/client';
  * número de WhatsApp. Num imóvel com 40 fotos isso materializa 40 linhas para usar uma — e
  * como o card são duas rotas (HTML e imagem), o custo saía dobrado.
  *
- * Os dois `take: 1` são o ponto: a capa é uma foto só, então no máximo duas linhas de
+ * Os `take` minúsculos são o ponto: a capa é uma foto só, então no máximo três linhas de
  * imagem voltam, independente do tamanho da galeria.
  *
  * As duas rotas usam esta mesma forma. A da imagem carrega alguns escalares que não usa,
@@ -29,12 +29,15 @@ export const SHARE_CARD_SELECT = {
   neighborhood: {
     select: { displayName: true, city: true, state: true },
   },
-  // Fotos sem ambiente, que é onde a capa costuma estar.
+  // A foto principal, se o operador escolheu uma, e a primeira sem ambiente, que é onde a
+  // capa cai quando ele não escolheu. As duas na mesma relação porque o Prisma não permite
+  // selecionar `images` duas vezes; `take: 2` é o pior caso (uma principal que é de ambiente
+  // + uma solta), e `roomId`/`isMain` no `select` é o que deixa `coverImageUrl` separá-las.
   images: {
-    where: { roomId: null },
-    orderBy: { order: 'asc' },
-    take: 1,
-    select: { url: true },
+    where: { OR: [{ roomId: null }, { isMain: true }] },
+    orderBy: [{ isMain: 'desc' }, { order: 'asc' }],
+    take: 2,
+    select: { url: true, roomId: true, isMain: true },
   },
   // Fallback: a primeira foto do primeiro ambiente, para o imóvel que organizou tudo em
   // ambientes e não tem nenhuma solta.
@@ -53,7 +56,18 @@ export const SHARE_CARD_SELECT = {
 
 export type ShareCardRow = Prisma.PropertyGetPayload<{ select: typeof SHARE_CARD_SELECT }>;
 
-/** A foto de capa: uma solta, senão a primeira do primeiro ambiente, senão nenhuma. */
+/**
+ * A foto de capa: a principal, senão uma solta, senão a primeira do primeiro ambiente,
+ * senão nenhuma.
+ *
+ * Os três últimos degraus são a heurística que sempre existiu, e continuam valendo inteiros
+ * para todo imóvel sem principal — que é o estado de todos eles até alguém escolher uma. O
+ * degrau novo é só o primeiro, e é ele que faz a capa do WhatsApp concordar com a foto que
+ * abre o carrossel do card.
+ */
 export function coverImageUrl(property: ShareCardRow): string | null {
-  return property.images[0]?.url ?? property.rooms[0]?.images[0]?.url ?? null;
+  const mainImage = property.images.find((image) => image.isMain);
+  const unassignedImage = property.images.find((image) => !image.roomId);
+
+  return mainImage?.url ?? unassignedImage?.url ?? property.rooms[0]?.images[0]?.url ?? null;
 }

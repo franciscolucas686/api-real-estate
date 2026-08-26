@@ -145,6 +145,7 @@ model PropertyImage {
   url        String
   label      String?
   order      Int           @default(0)
+  isMain     Boolean       @default(false)
   createdAt  DateTime      @default(now())
   property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   room       PropertyRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PropertyStatus } from '@prisma/client';
 import {
   ImageNotBelongToPropertyError,
+  ImageNotFoundError,
   InvalidImageFileError,
   PropertyNotFoundError,
   RoomNotBelongToPropertyError,
@@ -32,6 +33,7 @@ describe('PropertyImagesService', () => {
       create: jest.fn(),
       createMany: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       delete: jest.fn(),
       deleteMany: jest.fn(),
       count: jest.fn(),
@@ -349,6 +351,92 @@ describe('PropertyImagesService', () => {
       await expect(service.bulkDeleteImages('prop-1', { imageIds: ['img-1'] })).rejects.toThrow(
         'conexão perdida',
       );
+    });
+  });
+
+  describe('setMainImage / unsetMainImage', () => {
+    const image = { id: 'img-1', propertyId: 'prop-1', url: 'https://bucket/prop-1/a.jpg' };
+
+    it('promove a escolhida e rebaixa as demais na mesma transação', async () => {
+      mockPrismaService.propertyImage.findUnique.mockResolvedValue(image);
+      mockPrismaService.$transaction.mockResolvedValue([]);
+      mockPrismaService.propertyImage.findMany.mockResolvedValue([]);
+
+      await service.setMainImage('prop-1', 'img-1');
+
+      // Uma transação só: nada pode observar o imóvel com duas principais nem com nenhuma.
+      expect(mockPrismaService.$transaction).toHaveBeenCalledTimes(1);
+      expect(mockPrismaService.propertyImage.updateMany).toHaveBeenCalledWith({
+        where: { propertyId: 'prop-1', isMain: true },
+        data: { isMain: false },
+      });
+      expect(mockPrismaService.propertyImage.update).toHaveBeenCalledWith({
+        where: { id: 'img-1' },
+        data: { isMain: true },
+      });
+    });
+
+    // O rebaixamento em massa vem primeiro justamente para este caso: se a promoção viesse
+    // antes, remarcar a atual principal a deixaria sem principal nenhuma.
+    it('remarcar a foto que já é a principal a mantém principal', async () => {
+      mockPrismaService.propertyImage.findUnique.mockResolvedValue({ ...image, isMain: true });
+      mockPrismaService.$transaction.mockResolvedValue([]);
+      mockPrismaService.propertyImage.findMany.mockResolvedValue([]);
+
+      await service.setMainImage('prop-1', 'img-1');
+
+      const updateManyOrder =
+        mockPrismaService.propertyImage.updateMany.mock.invocationCallOrder[0];
+      const updateOrder = mockPrismaService.propertyImage.update.mock.invocationCallOrder[0];
+      expect(updateManyOrder).toBeLessThan(updateOrder);
+    });
+
+    it('desmarcar deixa o imóvel sem principal, com uma escrita só e sem transação', async () => {
+      mockPrismaService.propertyImage.findUnique.mockResolvedValue({ ...image, isMain: true });
+      mockPrismaService.propertyImage.update.mockResolvedValue({});
+      mockPrismaService.propertyImage.findMany.mockResolvedValue([]);
+
+      await service.unsetMainImage('prop-1', 'img-1');
+
+      expect(mockPrismaService.propertyImage.update).toHaveBeenCalledWith({
+        where: { id: 'img-1' },
+        data: { isMain: false },
+      });
+      expect(mockPrismaService.$transaction).not.toHaveBeenCalled();
+      expect(mockPrismaService.propertyImage.updateMany).not.toHaveBeenCalled();
+    });
+
+    // Idempotente por construção: grava `false` onde já havia `false`. O frontend chama esta
+    // rota a partir de um rascunho que pode estar desatualizado.
+    it('desmarcar uma foto que não é a principal não quebra', async () => {
+      mockPrismaService.propertyImage.findUnique.mockResolvedValue({ ...image, isMain: false });
+      mockPrismaService.propertyImage.update.mockResolvedValue({});
+      mockPrismaService.propertyImage.findMany.mockResolvedValue([]);
+
+      await expect(service.unsetMainImage('prop-1', 'img-1')).resolves.toBeDefined();
+    });
+
+    it.each([
+      ['setMainImage', (s: PropertyImagesService) => s.setMainImage('prop-1', 'img-1')],
+      ['unsetMainImage', (s: PropertyImagesService) => s.unsetMainImage('prop-1', 'img-1')],
+    ])('%s recusa imagem de outro imóvel', async (_name, call) => {
+      mockPrismaService.propertyImage.findUnique.mockResolvedValue({
+        ...image,
+        propertyId: 'outro-imovel',
+      });
+
+      await expect(call(service)).rejects.toThrow(ImageNotBelongToPropertyError);
+      expect(mockPrismaService.$transaction).not.toHaveBeenCalled();
+      expect(mockPrismaService.propertyImage.update).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['setMainImage', (s: PropertyImagesService) => s.setMainImage('prop-1', 'sumida')],
+      ['unsetMainImage', (s: PropertyImagesService) => s.unsetMainImage('prop-1', 'sumida')],
+    ])('%s recusa imagem inexistente', async (_name, call) => {
+      mockPrismaService.propertyImage.findUnique.mockResolvedValue(null);
+
+      await expect(call(service)).rejects.toThrow(ImageNotFoundError);
     });
   });
 

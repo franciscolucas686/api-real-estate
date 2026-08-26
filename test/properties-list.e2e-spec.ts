@@ -7,6 +7,7 @@ import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { R2Service } from '../src/r2/r2.service';
 import { createAppValidationPipe } from '../src/common/pipes/app-validation.pipe';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 /**
  * End-to-end coverage for `GET /properties`, mais a fronteira de dado privado de
@@ -291,6 +292,91 @@ describe('Properties list (e2e)', () => {
           state: 'SP',
           land: { zoning: 'RESIDENTIAL', topography: 'FLAT' },
         })
+        .expect(400);
+    });
+  });
+
+  /*
+   * A foto principal, pela rota de verdade.
+   *
+   * O que só aqui se enxerga é a invalidação de cache: as três leituras usam **a mesma**
+   * query string de propósito, então a segunda e a terceira só podem mudar se o
+   * `@InvalidateCache('/properties')` das rotas de principal tiver derrubado a entrada. Sem
+   * ele o operador escolheria a capa e continuaria vendo a antiga por até 5 minutos.
+   */
+  describe('foto principal — a capa do card', () => {
+    let propertyId: string;
+    let fachadaId: string;
+    let prisma: PrismaService;
+
+    // Mesma query nas três leituras: é o que transforma este teste num teste de cache.
+    const listar = () => auth('take=90');
+
+    const previewsDe = (body: unknown) =>
+      (body as { data: { id: string; previewImages: { id: string; url: string }[] }[] }).data.find(
+        (property) => property.id === propertyId,
+      )!.previewImages;
+
+    beforeAll(async () => {
+      prisma = app.get(PrismaService);
+
+      // O imóvel A do seed de teste: ACTIVE, com um ambiente e uma foto nele.
+      const property = await prisma.property.findFirstOrThrow({ where: { code: '000001' } });
+      propertyId = property.id;
+
+      // Uma foto solta, que é a candidata a capa. Inserida direto no banco porque o
+      // `R2Service` está sobrescrito neste arquivo e um upload real não sobe nada.
+      const fachada = await prisma.propertyImage.create({
+        data: {
+          propertyId,
+          url: 'https://placeholder.test/fachada.jpg',
+          order: 1,
+        },
+      });
+      fachadaId = fachada.id;
+    });
+
+    afterAll(async () => {
+      await prisma.propertyImage.deleteMany({ where: { id: fachadaId } });
+    });
+
+    it('sem principal, o card mostra a foto do ambiente — como sempre mostrou', async () => {
+      const res = await listar().expect(200);
+
+      expect(previewsDe(res.body)[0].url).toBe('https://placeholder.test/fake.jpg');
+    });
+
+    it('definir a principal a põe na frente, e o cache não serve a lista antiga', async () => {
+      await request(app.getHttpServer())
+        .patch(`/properties/${propertyId}/images/${fachadaId}/main`)
+        .set('Cookie', accessToken)
+        .expect(200);
+
+      const res = await listar().expect(200);
+
+      expect(previewsDe(res.body)[0]).toEqual({
+        id: fachadaId,
+        url: 'https://placeholder.test/fachada.jpg',
+      });
+    });
+
+    it('remover a principal devolve o card ao estado de antes', async () => {
+      await request(app.getHttpServer())
+        .delete(`/properties/${propertyId}/images/${fachadaId}/main`)
+        .set('Cookie', accessToken)
+        .expect(200);
+
+      const res = await listar().expect(200);
+
+      expect(previewsDe(res.body)[0].url).toBe('https://placeholder.test/fake.jpg');
+    });
+
+    it('a rota recusa uma imagem que é de outro imóvel', async () => {
+      const outro = await prisma.property.findFirstOrThrow({ where: { code: '000003' } });
+
+      await request(app.getHttpServer())
+        .patch(`/properties/${outro.id}/images/${fachadaId}/main`)
+        .set('Cookie', accessToken)
         .expect(400);
     });
   });

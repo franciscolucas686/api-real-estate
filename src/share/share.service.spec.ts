@@ -4,7 +4,7 @@ import sharp from 'sharp';
 import { ConfigService } from '../config/config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ShareService } from './share.service';
-import type { ShareCardRow } from './share.select';
+import { coverImageUrl, type ShareCardRow } from './share.select';
 
 const mockPrismaService = {
   property: { findFirst: jest.fn() },
@@ -39,7 +39,7 @@ function buildRow(overrides: Partial<ShareCardRow> = {}): ShareCardRow {
     bathrooms: 2,
     totalArea: 120,
     neighborhood: { displayName: 'Centro', city: 'Votorantim', state: 'SP' },
-    images: [{ url: 'https://cdn.exemplo.com/prop-1/capa.jpg' }],
+    images: [{ url: 'https://cdn.exemplo.com/prop-1/capa.jpg', roomId: null, isMain: false }],
     rooms: [],
     ...overrides,
   } as unknown as ShareCardRow;
@@ -113,6 +113,50 @@ describe('ShareService', () => {
       const html = await service.buildSharePage('prop-1', API_ORIGIN);
 
       expect(html).toContain('og:image');
+    });
+
+    /*
+     * Direto na função, não pelo HTML: `coverImageUrl` é pura e exportada, e é ela que faz a
+     * capa do WhatsApp concordar com a foto que abre o carrossel do card.
+     */
+    describe('coverImageUrl — a escolha da capa', () => {
+      it('prefere a foto principal, mesmo havendo uma solta antes dela', () => {
+        const row = buildRow({
+          images: [
+            { url: 'https://cdn.exemplo.com/prop-1/escolhida.jpg', roomId: 'room-1', isMain: true },
+            { url: 'https://cdn.exemplo.com/prop-1/solta.jpg', roomId: null, isMain: false },
+          ],
+        } as unknown as Partial<ShareCardRow>);
+
+        expect(coverImageUrl(row)).toBe('https://cdn.exemplo.com/prop-1/escolhida.jpg');
+      });
+
+      // O estado de todo imóvel até alguém escolher uma principal: a heurística de sempre.
+      it('sem principal, cai na primeira foto solta', () => {
+        const row = buildRow({
+          images: [
+            { url: 'https://cdn.exemplo.com/prop-1/solta.jpg', roomId: null, isMain: false },
+          ],
+          rooms: [{ images: [{ url: 'https://cdn.exemplo.com/prop-1/sala.jpg' }] }],
+        } as unknown as Partial<ShareCardRow>);
+
+        expect(coverImageUrl(row)).toBe('https://cdn.exemplo.com/prop-1/solta.jpg');
+      });
+
+      it('sem principal e sem foto solta, cai na primeira do primeiro ambiente', () => {
+        const row = buildRow({
+          images: [],
+          rooms: [{ images: [{ url: 'https://cdn.exemplo.com/prop-1/sala.jpg' }] }],
+        } as unknown as Partial<ShareCardRow>);
+
+        expect(coverImageUrl(row)).toBe('https://cdn.exemplo.com/prop-1/sala.jpg');
+      });
+
+      it('sem foto nenhuma, não há capa', () => {
+        const row = buildRow({ images: [], rooms: [] } as unknown as Partial<ShareCardRow>);
+
+        expect(coverImageUrl(row)).toBeNull();
+      });
     });
 
     it('omite og:image quando o imóvel não tem foto nenhuma', async () => {
