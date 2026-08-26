@@ -422,4 +422,116 @@ export class PropertiesController {
   ) {
     return this.propertyImagesService.reorderImages(propertyId, dto);
   }
+
+  /*
+   * Definir e remover a foto principal são duas rotas em vez de um `PATCH` com corpo
+   * `{ isMain }`: sem corpo, nenhuma delas precisa de DTO, e o `imageId` no caminho já
+   * diz sobre qual foto se fala nas duas direções.
+   *
+   * O segmento `/main` no fim é o que as mantém fora do alcance de
+   * `DELETE :propertyId/images/:imageId` — uma rota `.../images/main` seria capturada
+   * por aquela e morreria no `ParseUUIDPipe`, e só sobreviveria enquanto ninguém
+   * reordenasse as declarações deste arquivo.
+   */
+  @Patch(':propertyId/images/:imageId/main')
+  @UseGuards(JwtGuard)
+  @ApiSecurity('cookie')
+  @InvalidateCache('/properties')
+  @ApiOperation({
+    summary: 'Definir imagem como foto principal',
+    description:
+      'A foto principal abre o carrossel dos cards, da página de detalhes e é a capa do ' +
+      'compartilhamento. Só existe uma por imóvel: definir uma rebaixa a anterior na mesma ' +
+      'transação. Requer JWT.',
+  })
+  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
+  @ApiParam({ name: 'imageId', description: 'ID da imagem' })
+  @ApiResponse({
+    status: 200,
+    description: 'Galeria do imóvel, ordenada por `order`, já com a nova principal marcada',
+    content: {
+      'application/json': {
+        example: [
+          {
+            id: 'd3f5c93e-6db1-4c6c-9b53-26b8d8db8f09',
+            propertyId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+            roomId: null,
+            url: 'https://cdn.exemplo.com/imovel/foto.jpg',
+            label: null,
+            order: 0,
+            isMain: true,
+            createdAt: '2026-08-25T12:00:00.000Z',
+          },
+        ],
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'A imagem existe, mas é de outro imóvel',
+    content: {
+      'application/json': {
+        example: { statusCode: 400, code: 'IMAGE_NOT_BELONG_TO_PROPERTY', message: '...' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Imagem não encontrada' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async setMainImage(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+  ) {
+    return this.propertyImagesService.setMainImage(propertyId, imageId);
+  }
+
+  @Delete(':propertyId/images/:imageId/main')
+  @UseGuards(JwtGuard)
+  @ApiSecurity('cookie')
+  @InvalidateCache('/properties')
+  @ApiOperation({
+    summary: 'Remover a marcação de foto principal',
+    description:
+      'Devolve o imóvel ao estado sem foto principal, em que cada tela volta a escolher a ' +
+      'primeira foto pela regra de sempre. Idempotente: numa foto que não é a principal, não ' +
+      'faz nada. Requer JWT.',
+  })
+  @ApiParam({ name: 'propertyId', description: 'ID da propriedade' })
+  @ApiParam({ name: 'imageId', description: 'ID da imagem' })
+  @ApiResponse({
+    status: 200,
+    description: 'Galeria do imóvel, ordenada por `order`, sem nenhuma foto principal',
+    content: {
+      'application/json': {
+        example: [
+          {
+            id: 'd3f5c93e-6db1-4c6c-9b53-26b8d8db8f09',
+            propertyId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+            roomId: null,
+            url: 'https://cdn.exemplo.com/imovel/foto.jpg',
+            label: null,
+            order: 0,
+            isMain: false,
+            createdAt: '2026-08-25T12:00:00.000Z',
+          },
+        ],
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'A imagem existe, mas é de outro imóvel',
+    content: {
+      'application/json': {
+        example: { statusCode: 400, code: 'IMAGE_NOT_BELONG_TO_PROPERTY', message: '...' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Imagem não encontrada' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async unsetMainImage(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+  ) {
+    return this.propertyImagesService.unsetMainImage(propertyId, imageId);
+  }
 }

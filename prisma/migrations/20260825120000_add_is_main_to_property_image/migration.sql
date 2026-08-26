@@ -1,0 +1,27 @@
+-- A foto principal do imóvel: a que abre o carrossel dos cards, da página de detalhes
+-- e a capa do compartilhamento.
+--
+-- Esta coluna já existiu (`20260204090651_add_is_main_to_property_image`) e foi removida
+-- em `20260415093517` quando a listagem passou a montar o preview por ambiente. Ela volta
+-- porque o preview por ambiente resolve "quais fotos aparecem", não "qual aparece primeiro"
+-- — hoje isso é decidido por convenção posicional, e por três convenções diferentes
+-- (card, detalhe e share card discordam entre si). A coluna é a fonte de verdade única
+-- que os três passam a consultar.
+--
+-- **Sem backfill, de propósito.** Toda linha existente nasce `false`, então nenhum imóvel
+-- em produção tem foto principal logo após esta migration — e todo leitor cai no mesmo
+-- fallback de sempre ("se não há principal, a regra de antes"). O comportamento em produção
+-- fica idêntico ao atual até um corretor escolher uma foto, imóvel por imóvel, sem
+-- recadastro e sem janela de inconsistência.
+--
+-- Um backfill "primeira foto = principal" foi descartado: não mudaria nada na tela (o
+-- fallback já escolhe a primeira) e faria todo imóvel legado afirmar uma escolha que
+-- ninguém fez.
+--
+-- A exclusividade (uma principal por imóvel) vive na transação de `setMainImage`, em
+-- src/properties/property-images.service.ts, e não num índice único parcial: o Prisma não
+-- representa índices parciais no schema, então ele viraria drift a cada `migrate dev`.
+-- O serviço é o único caminho de escrita da coluna.
+
+-- AlterTable
+ALTER TABLE "PropertyImage" ADD COLUMN     "isMain" BOOLEAN NOT NULL DEFAULT false;

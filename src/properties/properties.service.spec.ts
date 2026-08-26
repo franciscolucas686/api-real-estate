@@ -597,6 +597,130 @@ describe('PropertiesService', () => {
     });
   });
 
+  describe('toCardDto — a foto principal abre o carrossel do card', () => {
+    /** Uma linha de card com só o que estas asserções olham. */
+    function buildRow(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'prop-1',
+        code: '0001',
+        type: 'HOUSE',
+        businessType: 'SALE',
+        status: 'ACTIVE',
+        price: null,
+        rentPrice: null,
+        deletedAt: null,
+        createdAt: new Date('2026-07-01'),
+        condoFee: null,
+        neighborhood: { displayName: 'Centro', city: 'São Paulo', state: 'SP' },
+        bedrooms: null,
+        suites: null,
+        bathrooms: null,
+        parkingSpaces: null,
+        totalArea: null,
+        builtArea: null,
+        rooms: [],
+        images: [],
+        ...overrides,
+      };
+    }
+
+    async function cardFor(overrides: Record<string, unknown>) {
+      mockPrismaService.property.findMany.mockResolvedValue([buildRow(overrides)]);
+      mockPrismaService.property.count.mockResolvedValue(1);
+      const resultado = await service.findAll({}, true);
+      return resultado.data[0];
+    }
+
+    // A guarda de regressão que mais importa: enquanto ninguém escolher uma principal — o
+    // estado de todo imóvel já cadastrado —, o card tem que sair exatamente como saía.
+    it('sem principal, o card sai igual ao de antes da coluna', async () => {
+      const card = await cardFor({
+        rooms: [
+          { images: [{ id: 'sala', url: 'u-sala' }] },
+          { images: [{ id: 'quarto', url: 'u-quarto' }] },
+        ],
+        images: [{ id: 'solta', url: 'u-solta', roomId: null, isMain: false }],
+      });
+
+      expect(card.previewImages).toEqual([
+        { id: 'sala', url: 'u-sala' },
+        { id: 'quarto', url: 'u-quarto' },
+      ]);
+    });
+
+    it('sem ambiente e sem principal, cai nas fotos soltas como sempre', async () => {
+      const card = await cardFor({
+        images: [
+          { id: 'a', url: 'u-a', roomId: null, isMain: false },
+          { id: 'b', url: 'u-b', roomId: null, isMain: false },
+        ],
+      });
+
+      expect(card.previewImages).toEqual([
+        { id: 'a', url: 'u-a' },
+        { id: 'b', url: 'u-b' },
+      ]);
+    });
+
+    it('a principal solta entra na frente das fotos de ambiente', async () => {
+      const card = await cardFor({
+        rooms: [
+          { images: [{ id: 'sala', url: 'u-sala' }] },
+          { images: [{ id: 'quarto', url: 'u-quarto' }] },
+        ],
+        images: [{ id: 'fachada', url: 'u-fachada', roomId: null, isMain: true }],
+      });
+
+      expect(card.previewImages).toEqual([
+        { id: 'fachada', url: 'u-fachada' },
+        { id: 'sala', url: 'u-sala' },
+        { id: 'quarto', url: 'u-quarto' },
+      ]);
+    });
+
+    // Uma principal que é a primeira foto de um ambiente já vem em `roomImages`. Prefixar
+    // sem filtrar a mostraria duas vezes no carrossel.
+    it('a principal de ambiente é içada sem duplicar', async () => {
+      const card = await cardFor({
+        rooms: [
+          { images: [{ id: 'sala', url: 'u-sala' }] },
+          { images: [{ id: 'quarto', url: 'u-quarto' }] },
+        ],
+        images: [{ id: 'quarto', url: 'u-quarto', roomId: 'room-2', isMain: true }],
+      });
+
+      expect(card.previewImages).toEqual([
+        { id: 'quarto', url: 'u-quarto' },
+        { id: 'sala', url: 'u-sala' },
+      ]);
+    });
+
+    it('o teto de 4 fotos do payload continua valendo com a principal na frente', async () => {
+      const card = await cardFor({
+        rooms: [
+          { images: [{ id: 'r1', url: 'u-r1' }] },
+          { images: [{ id: 'r2', url: 'u-r2' }] },
+          { images: [{ id: 'r3', url: 'u-r3' }] },
+          { images: [{ id: 'r4', url: 'u-r4' }] },
+        ],
+        images: [{ id: 'fachada', url: 'u-fachada', roomId: null, isMain: true }],
+      });
+
+      expect(card.previewImages).toHaveLength(4);
+      expect(card.previewImages[0]).toEqual({ id: 'fachada', url: 'u-fachada' });
+    });
+
+    // `roomId` e `isMain` existem no `select` só para as contas de cima; o card nunca os
+    // expôs e não é aqui que passa a expor.
+    it('não vaza roomId nem isMain no payload do card', async () => {
+      const card = await cardFor({
+        images: [{ id: 'fachada', url: 'u-fachada', roomId: null, isMain: true }],
+      });
+
+      expect(Object.keys(card.previewImages[0])).toEqual(['id', 'url']);
+    });
+  });
+
   describe('findAll — filtragem de status por autenticação', () => {
     function whereUsed(): Record<string, unknown> {
       const call = mockPrismaService.property.findMany.mock.calls[0] as [

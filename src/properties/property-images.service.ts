@@ -172,16 +172,71 @@ export class PropertyImagesService {
   }
 
   /**
-   * O `propertyId` da rota é conferido, não ignorado.
+   * A foto principal do imóvel: a que abre o carrossel dos cards, da página de detalhes
+   * e a capa do compartilhamento.
    *
-   * Ele chegava até aqui como um `userId` que o método nunca lia, então
-   * `DELETE /properties/{qualquer-id}/images/{imageId}` apagava a foto de outro
-   * imóvel — o `imageId` sozinho decidia tudo. Não é escalação de privilégio (esta
-   * API é deliberadamente sem isolamento entre usuários autenticados), mas era a
-   * única rota de foto que discordava de `bulkDeleteImages` e `reorderImages`, que
-   * sempre conferiram: uma tela desatualizada apagava silenciosamente a foto errada.
+   * Rebaixar a anterior e promover a nova acontece na mesma transação porque a
+   * exclusividade não está no banco. Ela até caberia num índice único parcial
+   * (`UNIQUE ("propertyId") WHERE "isMain"`), mas o Prisma não representa índices
+   * parciais no schema, então ele viraria drift a cada `migrate dev` — o preço de
+   * mantê-lo seria maior que o de concentrar a invariante aqui, que é o único caminho
+   * de escrita da coluna.
+   *
+   * O `updateMany` vem primeiro para que remarcar a foto que já é a principal continue
+   * funcionando: ela é rebaixada e promovida de novo, terminando marcada.
    */
-  async deleteImage(propertyId: string, imageId: string) {
+  async setMainImage(propertyId: string, imageId: string): Promise<PropertyImage[]> {
+    await this.ensureImageBelongsToProperty(propertyId, imageId);
+
+    await this.prisma.$transaction([
+      this.prisma.propertyImage.updateMany({
+        where: { propertyId, isMain: true },
+        data: { isMain: false },
+      }),
+      this.prisma.propertyImage.update({
+        where: { id: imageId },
+        data: { isMain: true },
+      }),
+    ]);
+
+    return this.prisma.propertyImage.findMany({
+      where: { propertyId },
+      orderBy: { order: 'asc' },
+    });
+  }
+
+  /**
+   * Devolve o imóvel ao estado sem foto principal — o mesmo de todo imóvel anterior a
+   * esta coluna, que cada leitor já resolve pelo seu fallback. Por isso não há promoção
+   * automática de uma substituta: "sem principal" é um estado válido, não um defeito.
+   *
+   * Uma escrita só, sem transação: desmarcar não tem invariante a preservar. E é
+   * idempotente por construção — numa foto que não é a principal, grava `false` onde já
+   * havia `false`.
+   */
+  async unsetMainImage(propertyId: string, imageId: string): Promise<PropertyImage[]> {
+    await this.ensureImageBelongsToProperty(propertyId, imageId);
+
+    await this.prisma.propertyImage.update({
+      where: { id: imageId },
+      data: { isMain: false },
+    });
+
+    return this.prisma.propertyImage.findMany({
+      where: { propertyId },
+      orderBy: { order: 'asc' },
+    });
+  }
+
+  /**
+   * A checagem que `deleteImage`, `setMainImage` e `unsetMainImage` compartilham: a foto
+   * existe **e** é deste imóvel. Ver o comentário de `deleteImage` para o bug que a
+   * segunda metade fecha.
+   */
+  private async ensureImageBelongsToProperty(
+    propertyId: string,
+    imageId: string,
+  ): Promise<PropertyImage> {
     const image = await this.prisma.propertyImage.findUnique({
       where: { id: imageId },
     });
@@ -193,6 +248,22 @@ export class PropertyImagesService {
     if (image.propertyId !== propertyId) {
       throw new ImageNotBelongToPropertyError(imageId, propertyId);
     }
+
+    return image;
+  }
+
+  /**
+   * O `propertyId` da rota é conferido, não ignorado.
+   *
+   * Ele chegava até aqui como um `userId` que o método nunca lia, então
+   * `DELETE /properties/{qualquer-id}/images/{imageId}` apagava a foto de outro
+   * imóvel — o `imageId` sozinho decidia tudo. Não é escalação de privilégio (esta
+   * API é deliberadamente sem isolamento entre usuários autenticados), mas era a
+   * única rota de foto que discordava de `bulkDeleteImages` e `reorderImages`, que
+   * sempre conferiram: uma tela desatualizada apagava silenciosamente a foto errada.
+   */
+  async deleteImage(propertyId: string, imageId: string) {
+    const image = await this.ensureImageBelongsToProperty(propertyId, imageId);
 
     await this.deleteImagesFromR2([image]);
 
@@ -375,6 +446,9 @@ export class PropertyImagesService {
       url,
       label: null,
       order,
+      // Foto nova nunca nasce principal: quem escolhe é o operador, por `setMainImage`.
+      // Um upload que se autopromovesse trocaria a capa do imóvel a cada lote enviado.
+      isMain: false,
       createdAt: new Date(),
     };
   }

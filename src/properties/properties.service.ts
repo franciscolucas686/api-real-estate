@@ -81,11 +81,24 @@ const PROPERTY_CARD_SELECT = {
       },
     },
   },
+  /*
+   * Duas coisas numa relação só, porque o Prisma não deixa selecionar `images` duas vezes:
+   * as fotos soltas (o fallback de sempre, para imóvel sem ambiente) e a foto principal,
+   * que pode estar em qualquer ambiente e precisa chegar aqui de todo jeito.
+   *
+   * Daí o `take` de +1: no pior caso são as 4 soltas do fallback mais uma principal que é
+   * de ambiente. O `roomId` entra no `select` para `toCardDto` conseguir separar as duas
+   * de novo — sem ele, uma foto de ambiente vazaria para o fallback de imóvel sem ambiente.
+   *
+   * O `createdAt asc` continua sendo o critério das soltas, e não `order`, apesar de o
+   * detalhe e o share card usarem `order`. Essa divergência é anterior a esta coluna e
+   * mexer nela mudaria a capa de imóveis que ninguém pediu para mexer.
+   */
   images: {
-    where: { roomId: null },
-    orderBy: { createdAt: 'asc' },
-    take: PREVIEW_LIMIT_ROOMS,
-    select: { id: true, url: true },
+    where: { OR: [{ roomId: null }, { isMain: true }] },
+    orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+    take: PREVIEW_LIMIT_ROOMS + 1,
+    select: { id: true, url: true, roomId: true, isMain: true },
   },
 } satisfies Prisma.PropertySelect;
 
@@ -548,6 +561,31 @@ export class PropertiesService {
         url: room.images[0].url,
       }));
 
+    /*
+     * A foto principal abre o carrossel do card; sem principal, a lista sai exatamente como
+     * saía antes desta coluna — é essa igualdade que faz os imóveis já cadastrados não
+     * mudarem de aparência no dia do deploy.
+     *
+     * A principal precisa ser **removida** da base antes de entrar na frente: quando ela é a
+     * primeira foto de um ambiente, ela já está em `roomImages`, e prefixar sem filtrar a
+     * duplicaria no carrossel. O `slice` no fim preserva o teto de fotos do payload.
+     */
+    const main = property.images.find((img) => img.isMain);
+    // Projetado para `{ id, url }` na hora: `roomId` e `isMain` só existem no `select` para
+    // as contas acima, e o card nunca os expôs.
+    const mainImage = main ? { id: main.id, url: main.url } : null;
+    const unassignedImages = property.images
+      .filter((img) => !img.roomId)
+      .map((img) => ({ id: img.id, url: img.url }));
+
+    const baseImages = roomImages.length > 0 ? roomImages : unassignedImages;
+    const previewImages = mainImage
+      ? [mainImage, ...baseImages.filter((img) => img.id !== mainImage.id)].slice(
+          0,
+          PREVIEW_LIMIT_ROOMS,
+        )
+      : baseImages;
+
     return {
       id: property.id,
       code: property.code,
@@ -568,7 +606,7 @@ export class PropertiesService {
       condoFee: property.condoFee?.toString() ?? null,
       createdAt: property.createdAt,
       deletedAt: property.deletedAt,
-      previewImages: roomImages.length > 0 ? roomImages : property.images,
+      previewImages,
     };
   }
 
@@ -647,6 +685,7 @@ export class PropertiesService {
       url: img.url,
       label: img.label,
       order: img.order,
+      isMain: img.isMain,
     }));
 
     const cache = property.neighborhood.locationCache;
@@ -739,6 +778,7 @@ export class PropertiesService {
             url: img.url,
             label: img.label,
             order: img.order,
+            isMain: img.isMain,
           })),
         })),
       },

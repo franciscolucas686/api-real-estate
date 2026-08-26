@@ -20,6 +20,14 @@ export class PropertyImageDto {
 
   @ApiProperty()
   order!: number;
+
+  @ApiProperty({
+    description:
+      'Se esta é a foto principal do imóvel — a que abre o carrossel dos cards, da página de ' +
+      'detalhes e a capa do compartilhamento. No máximo uma foto do imóvel tem `true`, e ' +
+      'nenhuma ter é um estado válido: é o de todo imóvel anterior a esta feature.',
+  })
+  isMain!: boolean;
 }
 
 export class PropertyRoomDto {
