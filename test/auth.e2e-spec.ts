@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
 import { R2Service } from '../src/r2/r2.service';
 import { createAppValidationPipe } from '../src/common/pipes/app-validation.pipe';
 
@@ -16,9 +17,13 @@ function extractCookie(setCookieHeader: string[] | undefined, name: string): str
 
 describe('Auth (e2e)', () => {
   let app: INestApplication<App>;
+  let prisma: PrismaService;
   const email = `e2e-auth-${Date.now()}-${randomUUID()}@test.local`;
   const password = 'Test@1234';
   const adminSecret = process.env.ADMIN_SECRET!;
+  // ASCII de propósito: header HTTP é latin-1 por especificação, então um acento aqui
+  // voltaria do parser do Node como mojibake e o teste falharia por causa da fixture.
+  const userAgent = 'e2e-auth-spec/1.0 (device label)';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -40,6 +45,8 @@ describe('Auth (e2e)', () => {
     app.useGlobalPipes(createAppValidationPipe());
     app.use(cookieParser());
     await app.init();
+
+    prisma = app.get(PrismaService);
   });
 
   afterAll(async () => {
@@ -50,12 +57,30 @@ describe('Auth (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/auth/register')
       .set('x-admin-secret', adminSecret)
+      .set('User-Agent', userAgent)
       .send({ email, password, name: 'E2E Auth Test' })
       .expect(201);
 
     expect(res.body.user).toMatchObject({ email });
     expect(extractCookie(res.get('Set-Cookie'), 'accessToken')).toContain('accessToken=');
     expect(extractCookie(res.get('Set-Cookie'), 'refreshToken')).toContain('refreshToken=');
+  });
+
+  /**
+   * O `user-agent` saiu do Swagger (ver `auth.controller.swagger.spec.ts`), mas continua
+   * sendo lido e gravado — quem o lê agora é `@UserAgent()` em vez de `@Headers()`. Sem esta
+   * asserção, remover o parâmetro por engano não quebraria teste nenhum.
+   *
+   * Reaproveita a sessão que o registro acima abriu de propósito: `POST /auth/register` tem
+   * teto de 5 requisições por 5 minutos e o arquivo já gasta 4.
+   */
+  it('a sessão aberta no registro guarda o user-agent da requisição', async () => {
+    const session = await prisma.session.findFirst({
+      where: { user: { email } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    expect(session?.userAgent).toBe(userAgent);
   });
 
   it('POST /auth/register com o mesmo email retorna 409', async () => {

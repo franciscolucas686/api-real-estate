@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   HttpCode,
   HttpStatus,
   Post,
@@ -24,6 +23,7 @@ import type { Request, Response } from 'express';
 import { ConfigService } from '../config/config.service';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { UserAgent } from './decorators/user-agent.decorator';
 import { CurrentUserDto } from './dto/current-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -63,18 +63,6 @@ export class AuthController {
       // o emitiu (uma segunda API, por exemplo).
       ...(domain && { domain }),
     };
-  }
-
-  /**
-   * Rótulo de diagnóstico da sessão, não identidade — nada depende dele. Truncado
-   * porque o User-Agent é texto arbitrário vindo do cliente e vai para uma coluna
-   * sem limite; 255 é folgado para qualquer navegador real.
-   */
-  private static readonly USER_AGENT_MAX_LENGTH = 255;
-
-  private truncateUserAgent(userAgent?: string): string | null {
-    if (!userAgent) return null;
-    return userAgent.slice(0, AuthController.USER_AGENT_MAX_LENGTH);
   }
 
   private setAuthCookies(response: Response, accessToken: string, refreshToken: string): void {
@@ -121,16 +109,17 @@ export class AuthController {
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'Email já cadastrado' })
+  @ApiResponse({ status: 400, description: 'Campos inválidos (VALIDATION_ERROR)' })
   @ApiResponse({ status: 403, description: 'Acesso não autorizado' })
+  @ApiResponse({ status: 409, description: 'Email já cadastrado' })
   async register(
     @Body() registerDto: RegisterDto,
     @Res({ passthrough: true }) response: Response,
-    @Headers('user-agent') userAgent?: string,
+    @UserAgent() userAgent: string | null,
   ) {
     const { accessToken, refreshToken, user } = await this.authService.register(
       registerDto,
-      this.truncateUserAgent(userAgent),
+      userAgent,
     );
 
     this.setAuthCookies(response, accessToken, refreshToken);
@@ -144,14 +133,6 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 5 * 60 * 1000, limit: 5 } })
   @ApiOperation({ summary: 'Fazer login' })
-  // Mesmo motivo do `register` acima: sem isto a doc pede um header que ninguém precisa enviar.
-  @ApiHeader({
-    name: 'user-agent',
-    description:
-      'Enviado automaticamente pelo cliente HTTP. Serve apenas como rótulo do dispositivo na ' +
-      'sessão criada — não é exigido e não afeta a autenticação.',
-    required: false,
-  })
   @ApiBody({ type: LoginDto })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -166,12 +147,9 @@ export class AuthController {
   async login(
     @Body() loginDto: LoginDto,
     @Res({ passthrough: true }) response: Response,
-    @Headers('user-agent') userAgent?: string,
+    @UserAgent() userAgent: string | null,
   ) {
-    const { accessToken, refreshToken, user } = await this.authService.login(
-      loginDto,
-      this.truncateUserAgent(userAgent),
-    );
+    const { accessToken, refreshToken, user } = await this.authService.login(loginDto, userAgent);
 
     this.setAuthCookies(response, accessToken, refreshToken);
 
