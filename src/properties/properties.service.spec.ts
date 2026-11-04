@@ -2,6 +2,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BusinessType,
+  GeocodingStatus,
   PropertyStatus,
   PropertyType,
   SaleType,
@@ -895,6 +896,117 @@ describe('PropertiesService', () => {
       });
 
       await expect(service.findOne('prop-1', true)).resolves.toMatchObject({ owner: null });
+    });
+  });
+
+  describe('findOne — endereço e coordenadas são independentes', () => {
+    function propertyRow(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'prop-1',
+        code: '000123',
+        businessType: BusinessType.SALE,
+        type: PropertyType.LAND,
+        price: null,
+        rentPrice: null,
+        condoFee: null,
+        status: PropertyStatus.ACTIVE,
+        saleTypes: [],
+        description: null,
+        totalArea: null,
+        builtArea: null,
+        bedrooms: null,
+        bathrooms: null,
+        suites: null,
+        parkingSpaces: null,
+        latitude: null,
+        longitude: null,
+        ownerName: null,
+        ownerPhone: null,
+        images: [],
+        rooms: [],
+        house: null,
+        apartment: null,
+        smallfarm: null,
+        countryhouse: null,
+        land: { zoning: Zoning.RESIDENTIAL, topography: Topography.FLAT },
+        neighborhood: {
+          displayName: 'Jardim Pacaembu',
+          city: 'Sorocaba',
+          state: 'SP',
+          locationCache: null,
+        },
+        userId: 'user-1',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...overrides,
+      };
+    }
+
+    beforeEach(() => {
+      mockWhatsappService.getWhatsappNumber.mockResolvedValue('11999999999');
+    });
+
+    // A regressão que este caso fecha: o `location` inteiro era anulado quando não
+    // havia coordenada, então o detalhe perdia bairro/cidade/estado — que a listagem
+    // do mesmo imóvel mostra publicamente. Três imóveis em produção estavam assim.
+    it('sem coordenada nenhuma, ainda devolve o endereço com lat/lng nulos', async () => {
+      mockPrismaService.property.findFirst.mockResolvedValue(propertyRow());
+
+      const detail = await service.findOne('prop-1', false);
+
+      expect(detail.location).toEqual({
+        latitude: null,
+        longitude: null,
+        neighborhood: 'Jardim Pacaembu',
+        city: 'Sorocaba',
+        state: 'SP',
+      });
+    });
+
+    it('a coordenada própria do imóvel tem prioridade sobre o cache do bairro', async () => {
+      mockPrismaService.property.findFirst.mockResolvedValue(
+        propertyRow({
+          latitude: -23.5,
+          longitude: -47.45,
+          neighborhood: {
+            displayName: 'Jardim Pacaembu',
+            city: 'Sorocaba',
+            state: 'SP',
+            locationCache: {
+              status: GeocodingStatus.RESOLVED,
+              latitude: -1,
+              longitude: -2,
+            },
+          },
+        }),
+      );
+
+      const detail = await service.findOne('prop-1', false);
+
+      expect(detail.location).toMatchObject({ latitude: -23.5, longitude: -47.45 });
+    });
+
+    it('cache do bairro em ERROR não vira coordenada, mas não apaga o endereço', async () => {
+      mockPrismaService.property.findFirst.mockResolvedValue(
+        propertyRow({
+          neighborhood: {
+            displayName: 'Jardim Pacaembu',
+            city: 'Sorocaba',
+            state: 'SP',
+            locationCache: { status: GeocodingStatus.ERROR, latitude: null, longitude: null },
+          },
+        }),
+      );
+
+      const detail = await service.findOne('prop-1', false);
+
+      expect(detail.location).toEqual({
+        latitude: null,
+        longitude: null,
+        neighborhood: 'Jardim Pacaembu',
+        city: 'Sorocaba',
+        state: 'SP',
+      });
     });
   });
 });

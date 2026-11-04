@@ -783,15 +783,27 @@ export class PropertiesService {
         })),
       },
       details,
-      location: coords
-        ? {
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-            neighborhood: property.neighborhood.displayName,
-            city: property.neighborhood.city,
-            state: property.neighborhood.state,
-          }
-        : null,
+      // O `location` é montado sempre: a **coordenada** pode faltar, o endereço não.
+      // Antes o objeto inteiro era anulado quando `coords` era null, e o endereço ia
+      // junto — então um imóvel cujo bairro o Nominatim não resolveu perdia
+      // bairro/cidade/estado no detalhe, dados que `PROPERTY_CARD_SELECT` já expõe
+      // publicamente na listagem do mesmo imóvel. `PropertyLocationDto` sempre
+      // descreveu este formato: `latitude`/`longitude` nullable, endereço obrigatório;
+      // era a montagem que não o cumpria.
+      //
+      // O campo segue tipado como `| null` no DTO de propósito. Hoje ele não pode mais
+      // ser null (`neighborhood` é relação obrigatória e `findOne` a inclui), mas
+      // estreitar seria mexer no contrato publicado no Swagger para remover um estado
+      // que nenhum cliente é prejudicado por continuar tratando — e o app e esta API
+      // sobem por pipelines separados (Vercel e Fly), então as duas formas convivem
+      // durante toda janela de deploy.
+      location: {
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
+        neighborhood: property.neighborhood.displayName,
+        city: property.neighborhood.city,
+        state: property.neighborhood.state,
+      },
       whatsappContact: whatsappNumber,
       // A única fronteira de dado privado desta resposta, e ela é da serialização, não da
       // busca: as colunas vêm do banco em toda leitura — o que decide é esta linha.
